@@ -75,25 +75,28 @@ contract SubscriptionManagerInvariantTest is Test {
         }
     }
 
-    /// INV-5: an Active subscription always has a real, positive currentPeriodEnd — i.e. it
-    /// reached Active status only via a successful _charge() (subscribe() reverts the whole tx
-    /// on charge failure, and resumeSubscription()/charge() always assign a fresh nonzero
-    /// currentPeriodEnd). Note: we intentionally do NOT assert currentPeriodEnd > block.timestamp
-    /// here — an Active subscription can legitimately become "due" (currentPeriodEnd <=
-    /// block.timestamp) simply because time (block.timestamp, shared across all subs) advanced
-    /// past it without anyone calling charge() on this specific subId yet; status only changes
-    /// inside an explicit charge()/cancel()/pause()/resume() call, never purely from the passage
-    /// of time. A staleness bound expressed as a constant offset from block.timestamp is
-    /// unsound here because chargeExisting() warps the *global* clock by up to 60 days per call,
-    /// and arbitrarily many such calls can occur across a single invariant run without ever
-    /// touching a given subId.
+    /// INV-5: an Active subscription's currentPeriodEnd always matches the ghost-tracked value
+    /// from its last successful charge via the handler (or is merely positive, for a sub that
+    /// was only ever subscribed and never charged again). This is stronger than bounding
+    /// currentPeriodEnd against block.timestamp: the handler's action set never calls
+    /// resumeSubscription (the only other function that can move currentPeriodEnd for an Active
+    /// sub), so _charge() is the sole writer, and comparing against the handler's own record of
+    /// what _charge() last produced catches any regression in that period math directly — with
+    /// no dependency on the shared global clock, which chargeExisting() warps by up to 60 days
+    /// per call (making any block.timestamp-relative bound unsound, since arbitrarily many warps
+    /// can occur without ever touching a given subId).
     function invariant_activePeriodEndConsistency() public view {
         uint256 n = handler.subIdsLength();
         for (uint256 i; i < n; ++i) {
             uint256 subId = handler.subIds(i);
             ISubscriptionManager.Subscription memory s = manager.getSubscription(subId);
             if (s.status == ISubscriptionManager.Status.Active) {
-                assertGt(s.currentPeriodEnd, 0);
+                uint40 lastCharged = handler.lastChargedPeriodEnd(subId);
+                if (lastCharged != 0) {
+                    assertEq(s.currentPeriodEnd, lastCharged);
+                } else {
+                    assertGt(s.currentPeriodEnd, 0);
+                }
             }
         }
     }
