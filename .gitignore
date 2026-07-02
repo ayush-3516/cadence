@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+packages/contracts/out/
+packages/contracts/cache/
+packages/contracts/broadcast/
+!deployments/.gitkeep
+.DS_Store
+*.log
