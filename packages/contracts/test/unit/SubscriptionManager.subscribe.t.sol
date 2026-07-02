@@ -112,4 +112,12 @@ contract SubscriptionManagerSubscribeTest is TestBase {
         assertEq(uint8(manager.getSubscription(subId).status), uint8(ISubscriptionManager.Status.Active));
         assertEq(token.balanceOf(payoutSplit), 19_850_000);
     }
+
+    function test_subscribeWithPermit_revertsOnUnknownPlan_beforeConsumingPermit() public {
+        // planId 999 doesn't exist: the plan-existence check must short-circuit
+        // before the permit signature is ever validated/consumed.
+        vm.prank(subscriber);
+        vm.expectRevert(ISubscriptionManager.PlanNotFound.selector);
+        manager.subscribeWithPermit(999, PLAN_AMOUNT, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
+    }
 }

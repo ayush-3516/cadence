@@ -170,6 +170,26 @@ contract SubscriptionManagerChargeTest is TestBase {
         assertEq(uint8(manager.getSubscription(subId2).status), uint8(ISubscriptionManager.Status.Active));
     }
 
+    function test_chargeBatch_finalizesPendingCancelAtPeriodEnd_withoutCharging() public {
+        uint256 subId = _activeSub();
+        vm.prank(subscriber);
+        manager.cancel(subId, false); // pendingCancel = true, access until periodEnd
+
+        ISubscriptionManager.Subscription memory before = manager.getSubscription(subId);
+        uint256 balanceBefore = token.balanceOf(subscriber);
+
+        vm.warp(before.currentPeriodEnd);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = subId;
+        vm.expectEmit(true, true, true, true);
+        emit ISubscriptionManager.Canceled(subId);
+        manager.chargeBatch(ids);
+
+        assertEq(uint8(manager.getSubscription(subId).status), uint8(ISubscriptionManager.Status.Canceled));
+        assertEq(token.balanceOf(subscriber), balanceBefore); // no charge happened
+        assertEq(manager.activeSubOf(keccak256(abi.encode(subscriber, before.planId))), 0);
+    }
+
     function test_chargeBatch_skipsNotDueSubs() public {
         uint256 subId = _activeSub(); // not due yet
         uint256[] memory ids = new uint256[](1);

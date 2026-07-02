@@ -91,4 +91,30 @@ contract FeeRegistryTest is Test {
         registry.clearMerchantFee(merchant);
         vm.stopPrank();
     }
+
+    function test_initialize_revertsWhenDefaultFeeAboveCap() public {
+        FeeRegistry impl = new FeeRegistry();
+        bytes memory initData = abi.encodeCall(FeeRegistry.initialize, (admin, 1001));
+        vm.expectRevert(FeeRegistry.FeeTooHigh.selector);
+        new ERC1967Proxy(address(impl), initData);
+    }
+
+    function test_upgradeToAndCall_onlyUpgraderRole() public {
+        FeeRegistry newImpl = new FeeRegistry();
+        vm.expectRevert();
+        registry.upgradeToAndCall(address(newImpl), "");
+    }
+
+    function test_upgradeToAndCall_succeedsForUpgraderRole_andPreservesState() public {
+        vm.prank(admin);
+        registry.setMerchantFee(merchant, 42);
+
+        FeeRegistry newImpl = new FeeRegistry();
+        vm.prank(admin);
+        registry.upgradeToAndCall(address(newImpl), "");
+
+        // state persists across the upgrade and the new implementation is live
+        assertEq(registry.getFeeBps(merchant), 42);
+        assertEq(registry.defaultFeeBps(), 75);
+    }
 }
