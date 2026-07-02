@@ -1,0 +1,273 @@
+{
+  "storage": [
+    {
+      "astId": 3003,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "plans",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_mapping(t_uint256,t_struct(Plan)4492_storage)"
+    },
+    {
+      "astId": 3008,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "subscriptions",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_mapping(t_uint256,t_struct(Subscription)4508_storage)"
+    },
+    {
+      "astId": 3012,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "supportedToken",
+      "offset": 0,
+      "slot": "2",
+      "type": "t_mapping(t_address,t_bool)"
+    },
+    {
+      "astId": 3016,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "activeSubOf",
+      "offset": 0,
+      "slot": "3",
+      "type": "t_mapping(t_bytes32,t_uint256)"
+    },
+    {
+      "astId": 3018,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "nextPlanId",
+      "offset": 0,
+      "slot": "4",
+      "type": "t_uint256"
+    },
+    {
+      "astId": 3020,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "nextSubId",
+      "offset": 0,
+      "slot": "5",
+      "type": "t_uint256"
+    },
+    {
+      "astId": 3022,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "treasury",
+      "offset": 0,
+      "slot": "6",
+      "type": "t_address"
+    },
+    {
+      "astId": 3025,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "feeRegistry",
+      "offset": 0,
+      "slot": "7",
+      "type": "t_contract(IFeeRegistry)4468"
+    },
+    {
+      "astId": 3029,
+      "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "8",
+      "type": "t_array(t_uint256)45_storage"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    "t_array(t_uint256)45_storage": {
+      "encoding": "inplace",
+      "label": "uint256[45]",
+      "numberOfBytes": "1440",
+      "base": "t_uint256"
+    },
+    "t_bool": {
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    "t_bytes32": {
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    "t_contract(IFeeRegistry)4468": {
+      "encoding": "inplace",
+      "label": "contract IFeeRegistry",
+      "numberOfBytes": "20"
+    },
+    "t_enum(Status)4477": {
+      "encoding": "inplace",
+      "label": "enum ISubscriptionManager.Status",
+      "numberOfBytes": "1"
+    },
+    "t_mapping(t_address,t_bool)": {
+      "encoding": "mapping",
+      "key": "t_address",
+      "label": "mapping(address => bool)",
+      "numberOfBytes": "32",
+      "value": "t_bool"
+    },
+    "t_mapping(t_bytes32,t_uint256)": {
+      "encoding": "mapping",
+      "key": "t_bytes32",
+      "label": "mapping(bytes32 => uint256)",
+      "numberOfBytes": "32",
+      "value": "t_uint256"
+    },
+    "t_mapping(t_uint256,t_struct(Plan)4492_storage)": {
+      "encoding": "mapping",
+      "key": "t_uint256",
+      "label": "mapping(uint256 => struct ISubscriptionManager.Plan)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Plan)4492_storage"
+    },
+    "t_mapping(t_uint256,t_struct(Subscription)4508_storage)": {
+      "encoding": "mapping",
+      "key": "t_uint256",
+      "label": "mapping(uint256 => struct ISubscriptionManager.Subscription)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Subscription)4508_storage"
+    },
+    "t_struct(Plan)4492_storage": {
+      "encoding": "inplace",
+      "label": "struct ISubscriptionManager.Plan",
+      "numberOfBytes": "160",
+      "members": [
+        {
+          "astId": 4479,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "merchant",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_address"
+        },
+        {
+          "astId": 4481,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "payoutSplit",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_address"
+        },
+        {
+          "astId": 4483,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "token",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_address"
+        },
+        {
+          "astId": 4485,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "amount",
+          "offset": 0,
+          "slot": "3",
+          "type": "t_uint256"
+        },
+        {
+          "astId": 4487,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "period",
+          "offset": 0,
+          "slot": "4",
+          "type": "t_uint40"
+        },
+        {
+          "astId": 4489,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "trialPeriod",
+          "offset": 5,
+          "slot": "4",
+          "type": "t_uint40"
+        },
+        {
+          "astId": 4491,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "active",
+          "offset": 10,
+          "slot": "4",
+          "type": "t_bool"
+        }
+      ]
+    },
+    "t_struct(Subscription)4508_storage": {
+      "encoding": "inplace",
+      "label": "struct ISubscriptionManager.Subscription",
+      "numberOfBytes": "96",
+      "members": [
+        {
+          "astId": 4494,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "planId",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint256"
+        },
+        {
+          "astId": 4496,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "subscriber",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_address"
+        },
+        {
+          "astId": 4499,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "status",
+          "offset": 20,
+          "slot": "1",
+          "type": "t_enum(Status)4477"
+        },
+        {
+          "astId": 4501,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "currentPeriodEnd",
+          "offset": 21,
+          "slot": "1",
+          "type": "t_uint40"
+        },
+        {
+          "astId": 4503,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "pausedRemaining",
+          "offset": 26,
+          "slot": "1",
+          "type": "t_uint40"
+        },
+        {
+          "astId": 4505,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "canceledAt",
+          "offset": 0,
+          "slot": "2",
+          "type": "t_uint40"
+        },
+        {
+          "astId": 4507,
+          "contract": "src/SubscriptionManager.sol:SubscriptionManager",
+          "label": "pendingCancel",
+          "offset": 5,
+          "slot": "2",
+          "type": "t_bool"
+        }
+      ]
+    },
+    "t_uint256": {
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    "t_uint40": {
+      "encoding": "inplace",
+      "label": "uint40",
+      "numberOfBytes": "5"
+    }
+  }
+}

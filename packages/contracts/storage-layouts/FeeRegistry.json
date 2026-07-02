@@ -1,0 +1,86 @@
+{
+  "storage": [
+    {
+      "astId": 2048,
+      "contract": "src/FeeRegistry.sol:FeeRegistry",
+      "label": "defaultFeeBps",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_uint16"
+    },
+    {
+      "astId": 2053,
+      "contract": "src/FeeRegistry.sol:FeeRegistry",
+      "label": "merchantFee",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_mapping(t_address,t_struct(Override)2038_storage)"
+    },
+    {
+      "astId": 2057,
+      "contract": "src/FeeRegistry.sol:FeeRegistry",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "2",
+      "type": "t_array(t_uint256)45_storage"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    "t_array(t_uint256)45_storage": {
+      "encoding": "inplace",
+      "label": "uint256[45]",
+      "numberOfBytes": "1440",
+      "base": "t_uint256"
+    },
+    "t_bool": {
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    "t_mapping(t_address,t_struct(Override)2038_storage)": {
+      "encoding": "mapping",
+      "key": "t_address",
+      "label": "mapping(address => struct FeeRegistry.Override)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Override)2038_storage"
+    },
+    "t_struct(Override)2038_storage": {
+      "encoding": "inplace",
+      "label": "struct FeeRegistry.Override",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "astId": 2035,
+          "contract": "src/FeeRegistry.sol:FeeRegistry",
+          "label": "set",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_bool"
+        },
+        {
+          "astId": 2037,
+          "contract": "src/FeeRegistry.sol:FeeRegistry",
+          "label": "bps",
+          "offset": 1,
+          "slot": "0",
+          "type": "t_uint16"
+        }
+      ]
+    },
+    "t_uint16": {
+      "encoding": "inplace",
+      "label": "uint16",
+      "numberOfBytes": "2"
+    },
+    "t_uint256": {
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    }
+  }
+}

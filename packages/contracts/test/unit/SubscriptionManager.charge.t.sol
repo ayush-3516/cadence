@@ -178,6 +178,30 @@ contract SubscriptionManagerChargeTest is TestBase {
         assertEq(uint8(manager.getSubscription(subId).status), uint8(ISubscriptionManager.Status.Active));
     }
 
+    function test_gas_chargeBatch50() public {
+        uint256 planId = _createPlan(0);
+        uint256[] memory ids = new uint256[](50);
+        for (uint256 i; i < 50; ++i) {
+            address s = address(uint160(uint256(keccak256(abi.encode("gas-sub", i)))));
+            token.mint(s, PLAN_AMOUNT);
+            vm.prank(s);
+            token.approve(address(manager), PLAN_AMOUNT);
+            vm.prank(s);
+            ids[i] = manager.subscribe(planId);
+        }
+
+        ISubscriptionManager.Subscription memory s0 = manager.getSubscription(ids[0]);
+        vm.warp(s0.currentPeriodEnd);
+
+        // top up all 50 for renewal
+        for (uint256 i; i < 50; ++i) {
+            ISubscriptionManager.Subscription memory s = manager.getSubscription(ids[i]);
+            token.mint(s.subscriber, PLAN_AMOUNT);
+        }
+
+        manager.chargeBatch(ids); // gas usage captured by forge snapshot
+    }
+
     function test_isActive_trueForActiveAndTrialing() public {
         uint256 subId = _activeSub();
         assertTrue(manager.isActive(subId));
