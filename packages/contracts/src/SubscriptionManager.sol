@@ -1,0 +1,183 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ISubscriptionManager} from "./interfaces/ISubscriptionManager.sol";
+import {IFeeRegistry} from "./interfaces/IFeeRegistry.sol";
+
+contract SubscriptionManager is
+    Initializable,
+    UUPSUpgradeable,
+    AccessControlUpgradeable,
+    ReentrancyGuard,
+    PausableUpgradeable,
+    ISubscriptionManager
+{
+    using SafeERC20 for IERC20;
+
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+    uint16 public constant MAX_FEE_BPS = 1000;
+
+    mapping(uint256 => Plan) public plans;
+    mapping(uint256 => Subscription) public subscriptions;
+    mapping(address => bool) public supportedToken;
+    mapping(bytes32 => uint256) public activeSubOf;
+
+    uint256 public nextPlanId;
+    uint256 public nextSubId;
+    address public treasury;
+    IFeeRegistry public feeRegistry;
+
+    uint256[45] private __gap;
+
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address admin, address treasury_, address feeRegistry_, address[] calldata tokens_)
+        external
+        initializer
+    {
+        __AccessControl_init();
+        __Pausable_init();
+        if (admin == address(0) || treasury_ == address(0) || feeRegistry_ == address(0)) revert ZeroAddress();
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(UPGRADER_ROLE, admin);
+        _grantRole(PAUSER_ROLE, admin);
+        treasury = treasury_;
+        feeRegistry = IFeeRegistry(feeRegistry_);
+        for (uint256 i; i < tokens_.length; ++i) {
+            supportedToken[tokens_[i]] = true;
+            emit SupportedTokenSet(tokens_[i], true);
+        }
+        nextPlanId = 1;
+        nextSubId = 1;
+    }
+
+    // --- merchant ---
+
+    function createPlan(address payoutSplit, address token, uint256 amount, uint40 period, uint40 trialPeriod)
+        external
+        returns (uint256 planId)
+    {
+        if (payoutSplit == address(0)) revert ZeroAddress();
+        if (!supportedToken[token]) revert TokenNotSupported();
+        if (amount == 0) revert InvalidAmount();
+        if (period == 0) revert InvalidPeriod();
+
+        planId = nextPlanId++;
+        plans[planId] = Plan({
+            merchant: msg.sender,
+            payoutSplit: payoutSplit,
+            token: token,
+            amount: amount,
+            period: period,
+            trialPeriod: trialPeriod,
+            active: true
+        });
+
+        emit PlanCreated(planId, msg.sender, payoutSplit, token, amount, period, trialPeriod);
+    }
+
+    function setPlanActive(uint256 planId, bool active) external {
+        Plan storage p = plans[planId];
+        if (p.merchant == address(0)) revert PlanNotFound();
+        if (p.merchant != msg.sender) revert NotMerchant();
+        p.active = active;
+        emit PlanStatusChanged(planId, active);
+    }
+
+    // --- subscriber (stubs, Task 6) ---
+
+    function subscribe(uint256) external pure returns (uint256) {
+        revert("not implemented");
+    }
+
+    function subscribeWithPermit(uint256, uint256, uint256, uint8, bytes32, bytes32) external pure returns (uint256) {
+        revert("not implemented");
+    }
+
+    function cancel(uint256, bool) external pure {
+        revert("not implemented");
+    }
+
+    function pauseSubscription(uint256) external pure {
+        revert("not implemented");
+    }
+
+    function resumeSubscription(uint256) external pure {
+        revert("not implemented");
+    }
+
+    // --- charging (stubs, Task 7) ---
+
+    function charge(uint256) external pure {
+        revert("not implemented");
+    }
+
+    function chargeBatch(uint256[] calldata) external pure {
+        revert("not implemented");
+    }
+
+    // --- admin ---
+
+    function setSupportedToken(address token, bool supported) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        supportedToken[token] = supported;
+        emit SupportedTokenSet(token, supported);
+    }
+
+    function setTreasury(address treasury_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (treasury_ == address(0)) revert ZeroAddress();
+        treasury = treasury_;
+        emit TreasuryUpdated(treasury_);
+    }
+
+    function setFeeRegistry(address feeRegistry_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (feeRegistry_ == address(0)) revert ZeroAddress();
+        feeRegistry = IFeeRegistry(feeRegistry_);
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
+
+    // --- views ---
+
+    function getPlan(uint256 planId) external view returns (Plan memory) {
+        return plans[planId];
+    }
+
+    function getSubscription(uint256 subId) external view returns (Subscription memory) {
+        return subscriptions[subId];
+    }
+
+    function isActive(uint256) external pure returns (bool) {
+        revert("not implemented");
+    }
+
+    function isDue(uint256) external pure returns (bool) {
+        revert("not implemented");
+    }
+
+    function nextChargeTime(uint256 subId) external view returns (uint40) {
+        return subscriptions[subId].currentPeriodEnd;
+    }
+
+    function isSupportedToken(address token) external view returns (bool) {
+        return supportedToken[token];
+    }
+
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
+}
