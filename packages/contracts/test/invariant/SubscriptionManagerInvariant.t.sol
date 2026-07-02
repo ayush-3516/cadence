@@ -75,16 +75,25 @@ contract SubscriptionManagerInvariantTest is Test {
         }
     }
 
-    /// INV-5: an Active subscription's currentPeriodEnd is always in the future relative to
-    /// the last successful charge (i.e. never sits at or before block.timestamp while Active,
-    /// since charge() advances it strictly forward from block.timestamp).
+    /// INV-5: an Active subscription always has a real, positive currentPeriodEnd — i.e. it
+    /// reached Active status only via a successful _charge() (subscribe() reverts the whole tx
+    /// on charge failure, and resumeSubscription()/charge() always assign a fresh nonzero
+    /// currentPeriodEnd). Note: we intentionally do NOT assert currentPeriodEnd > block.timestamp
+    /// here — an Active subscription can legitimately become "due" (currentPeriodEnd <=
+    /// block.timestamp) simply because time (block.timestamp, shared across all subs) advanced
+    /// past it without anyone calling charge() on this specific subId yet; status only changes
+    /// inside an explicit charge()/cancel()/pause()/resume() call, never purely from the passage
+    /// of time. A staleness bound expressed as a constant offset from block.timestamp is
+    /// unsound here because chargeExisting() warps the *global* clock by up to 60 days per call,
+    /// and arbitrarily many such calls can occur across a single invariant run without ever
+    /// touching a given subId.
     function invariant_activePeriodEndConsistency() public view {
         uint256 n = handler.subIdsLength();
         for (uint256 i; i < n; ++i) {
             uint256 subId = handler.subIds(i);
             ISubscriptionManager.Subscription memory s = manager.getSubscription(subId);
             if (s.status == ISubscriptionManager.Status.Active) {
-                assertGe(s.currentPeriodEnd, uint40(block.timestamp) - 60 days - 1); // charge() only advances forward from warp-bounded actions
+                assertGt(s.currentPeriodEnd, 0);
             }
         }
     }

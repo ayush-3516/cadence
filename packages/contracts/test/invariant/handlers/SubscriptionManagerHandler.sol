@@ -8,7 +8,7 @@ import {MockUSDC} from "../../helpers/MockUSDC.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 contract SubscriptionManagerHandler is StdUtils {
-    Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cabin")))));
+    Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     SubscriptionManager public manager;
     MockUSDC public token;
@@ -57,7 +57,17 @@ contract SubscriptionManagerHandler is StdUtils {
 
         try manager.charge(subId) {
             ISubscriptionManager.Subscription memory after_ = manager.getSubscription(subId);
-            if (after_.status == ISubscriptionManager.Status.Active && before.currentPeriodEnd == lastChargedPeriodEnd[subId] && lastChargedPeriodEnd[subId] != 0) {
+            // A genuine "charged twice in the same period" would mean this successful charge
+            // produced the *same* resulting currentPeriodEnd as the previous successful charge
+            // (i.e. the period failed to advance). Comparing `before.currentPeriodEnd` (this
+            // call's pre-state, which for any legitimate 2nd+ charge always equals the previous
+            // charge's post-state) against lastChargedPeriodEnd is always true for normal
+            // sequential charging and is not evidence of a double charge — compare the two
+            // *post*-charge results instead.
+            if (
+                after_.status == ISubscriptionManager.Status.Active && lastChargedPeriodEnd[subId] != 0
+                    && after_.currentPeriodEnd == lastChargedPeriodEnd[subId]
+            ) {
                 ghost_chargedTwiceInSamePeriod++;
             }
             if (after_.status == ISubscriptionManager.Status.Active) {
