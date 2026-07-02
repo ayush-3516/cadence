@@ -183,26 +183,90 @@ contract SubscriptionManager is
         return true;
     }
 
-    function cancel(uint256, bool) external pure {
-        revert("not implemented");
+    function cancel(uint256 subId, bool immediate) external {
+        Subscription storage s = subscriptions[subId];
+        if (s.subscriber == address(0)) revert SubNotFound();
+        if (s.subscriber != msg.sender) revert NotSubscriber();
+        if (
+            s.status != Status.Trialing && s.status != Status.Active && s.status != Status.PastDue
+                && s.status != Status.Paused
+        ) revert InvalidStatus();
+
+        if (immediate) {
+            s.status = Status.Canceled;
+            s.canceledAt = uint40(block.timestamp);
+            delete activeSubOf[keccak256(abi.encode(s.subscriber, s.planId))];
+            emit Canceled(subId);
+            emit StatusChanged(subId, Status.Canceled);
+        } else {
+            s.pendingCancel = true;
+            s.canceledAt = uint40(block.timestamp);
+            emit CancelScheduled(subId, s.currentPeriodEnd);
+        }
     }
 
-    function pauseSubscription(uint256) external pure {
-        revert("not implemented");
+    function pauseSubscription(uint256 subId) external {
+        Subscription storage s = subscriptions[subId];
+        if (s.subscriber == address(0)) revert SubNotFound();
+        if (s.subscriber != msg.sender) revert NotSubscriber();
+        if (s.status != Status.Active) revert InvalidStatus();
+
+        s.pausedRemaining = s.currentPeriodEnd > uint40(block.timestamp) ? s.currentPeriodEnd - uint40(block.timestamp) : 0;
+        s.status = Status.Paused;
+        emit Paused(subId, s.pausedRemaining);
     }
 
-    function resumeSubscription(uint256) external pure {
-        revert("not implemented");
+    function resumeSubscription(uint256 subId) external {
+        Subscription storage s = subscriptions[subId];
+        if (s.subscriber == address(0)) revert SubNotFound();
+        if (s.subscriber != msg.sender) revert NotSubscriber();
+        if (s.status != Status.Paused) revert InvalidStatus();
+
+        s.currentPeriodEnd = uint40(block.timestamp) + s.pausedRemaining;
+        s.pausedRemaining = 0;
+        s.status = Status.Active;
+        emit Resumed(subId, s.currentPeriodEnd);
     }
 
-    // --- charging (stubs, Task 7) ---
+    // --- charging ---
 
-    function charge(uint256) external pure {
-        revert("not implemented");
+    function charge(uint256 subId) external nonReentrant whenNotPaused {
+        Subscription storage s = subscriptions[subId];
+        if (s.subscriber == address(0)) revert SubNotFound();
+        if (
+            s.status != Status.Trialing && s.status != Status.Active && s.status != Status.PastDue
+        ) revert InvalidStatus();
+        if (block.timestamp < s.currentPeriodEnd) revert NotDue();
+
+        if (s.pendingCancel && block.timestamp >= s.currentPeriodEnd) {
+            s.status = Status.Canceled;
+            s.canceledAt = uint40(block.timestamp);
+            delete activeSubOf[keccak256(abi.encode(s.subscriber, s.planId))];
+            emit Canceled(subId);
+            return;
+        }
+
+        _charge(subId);
     }
 
-    function chargeBatch(uint256[] calldata) external pure {
-        revert("not implemented");
+    function chargeBatch(uint256[] calldata subIds) external nonReentrant whenNotPaused {
+        for (uint256 i; i < subIds.length; ++i) {
+            uint256 subId = subIds[i];
+            Subscription storage s = subscriptions[subId];
+            if (s.subscriber == address(0)) continue;
+            if (s.status != Status.Trialing && s.status != Status.Active && s.status != Status.PastDue) continue;
+            if (block.timestamp < s.currentPeriodEnd) continue;
+
+            if (s.pendingCancel && block.timestamp >= s.currentPeriodEnd) {
+                s.status = Status.Canceled;
+                s.canceledAt = uint40(block.timestamp);
+                delete activeSubOf[keccak256(abi.encode(s.subscriber, s.planId))];
+                emit Canceled(subId);
+                continue;
+            }
+
+            _charge(subId);
+        }
     }
 
     // --- admin ---
@@ -241,12 +305,17 @@ contract SubscriptionManager is
         return subscriptions[subId];
     }
 
-    function isActive(uint256) external pure returns (bool) {
-        revert("not implemented");
+    function isActive(uint256 subId) external view returns (bool) {
+        Subscription storage s = subscriptions[subId];
+        if (s.status == Status.Active || s.status == Status.Trialing) return true;
+        if (s.pendingCancel && block.timestamp < s.currentPeriodEnd) return true;
+        return false;
     }
 
-    function isDue(uint256) external pure returns (bool) {
-        revert("not implemented");
+    function isDue(uint256 subId) external view returns (bool) {
+        Subscription storage s = subscriptions[subId];
+        bool chargeable = s.status == Status.Trialing || s.status == Status.Active || s.status == Status.PastDue;
+        return chargeable && block.timestamp >= s.currentPeriodEnd;
     }
 
     function nextChargeTime(uint256 subId) external view returns (uint40) {
