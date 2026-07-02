@@ -95,14 +95,92 @@ contract SubscriptionManager is
         emit PlanStatusChanged(planId, active);
     }
 
-    // --- subscriber (stubs, Task 6) ---
+    // --- subscriber ---
 
-    function subscribe(uint256) external pure returns (uint256) {
-        revert("not implemented");
+    function subscribe(uint256 planId) external nonReentrant whenNotPaused returns (uint256 subId) {
+        subId = _openSubscription(planId, msg.sender);
     }
 
-    function subscribeWithPermit(uint256, uint256, uint256, uint8, bytes32, bytes32) external pure returns (uint256) {
-        revert("not implemented");
+    function subscribeWithPermit(
+        uint256 planId,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused returns (uint256 subId) {
+        Plan storage p = plans[planId];
+        if (p.merchant == address(0)) revert PlanNotFound();
+        IERC20Permit(p.token).permit(msg.sender, address(this), value, deadline, v, r, s);
+        subId = _openSubscription(planId, msg.sender);
+    }
+
+    function _openSubscription(uint256 planId, address subscriberAddr) internal returns (uint256 subId) {
+        Plan storage p = plans[planId];
+        if (p.merchant == address(0)) revert PlanNotFound();
+        if (!p.active) revert PlanInactive();
+
+        bytes32 key = keccak256(abi.encode(subscriberAddr, planId));
+        uint256 existing = activeSubOf[key];
+        if (existing != 0 && subscriptions[existing].status != Status.Canceled) revert AlreadyActive();
+
+        subId = nextSubId++;
+        activeSubOf[key] = subId;
+
+        if (p.trialPeriod > 0) {
+            subscriptions[subId] = Subscription({
+                planId: planId,
+                subscriber: subscriberAddr,
+                status: Status.Trialing,
+                currentPeriodEnd: uint40(block.timestamp) + p.trialPeriod,
+                pausedRemaining: 0,
+                canceledAt: 0,
+                pendingCancel: false
+            });
+            emit Subscribed(subId, planId, subscriberAddr, subscriptions[subId].currentPeriodEnd, true);
+        } else {
+            subscriptions[subId] = Subscription({
+                planId: planId,
+                subscriber: subscriberAddr,
+                status: Status.Active,
+                currentPeriodEnd: 0,
+                pausedRemaining: 0,
+                canceledAt: 0,
+                pendingCancel: false
+            });
+            emit Subscribed(subId, planId, subscriberAddr, uint40(block.timestamp) + p.period, false);
+            bool ok = _charge(subId);
+            if (!ok) revert TransferFailed();
+        }
+    }
+
+    function _charge(uint256 subId) internal returns (bool success) {
+        Subscription storage s = subscriptions[subId];
+        Plan storage p = plans[s.planId];
+
+        uint16 bps = feeRegistry.getFeeBps(p.merchant);
+        if (bps > MAX_FEE_BPS) bps = MAX_FEE_BPS;
+        uint256 fee = (p.amount * bps) / 10_000;
+        uint256 net = p.amount - fee;
+
+        IERC20 tok = IERC20(p.token);
+        if (tok.balanceOf(s.subscriber) < p.amount || tok.allowance(s.subscriber, address(this)) < p.amount) {
+            s.status = Status.PastDue;
+            emit ChargeFailed(subId, tok.balanceOf(s.subscriber) < p.amount ? 1 : 2);
+            emit StatusChanged(subId, Status.PastDue);
+            return false;
+        }
+
+        tok.safeTransferFrom(s.subscriber, address(this), p.amount);
+        tok.safeTransfer(treasury, fee);
+        tok.safeTransfer(p.payoutSplit, net);
+
+        uint40 base = s.currentPeriodEnd > uint40(block.timestamp) ? s.currentPeriodEnd : uint40(block.timestamp);
+        s.currentPeriodEnd = base + p.period;
+        s.status = Status.Active;
+
+        emit Charged(subId, s.planId, p.amount, fee, net, s.currentPeriodEnd);
+        return true;
     }
 
     function cancel(uint256, bool) external pure {
