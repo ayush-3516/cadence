@@ -36,8 +36,10 @@ allowance model remains the permanent EOA-compatible fallback.
 ```bash
 forge install
 forge build
-forge test              # unit + fuzz + invariant
-forge test --match-path test/fork/**  --fork-url $BASE_SEPOLIA_RPC_URL  # fork tests
+forge test              # unit + fuzz + invariant + fork
+                         # (fork tests call vm.createSelectFork internally, so no
+                         # --fork-url flag: combining both causes an op-revm panic
+                         # on post-Isthmus OP-stack chains)
 forge coverage --report summary
 forge snapshot           # regenerate gas baseline
 ./script/CheckStorageLayout.sh   # before any upgrade
@@ -56,3 +58,13 @@ Writes addresses to `../../deployments/<chainId>.json`.
 held by a `TimelockController` (48h minimum delay). On Base Sepolia the
 deployer EOA is the Timelock's sole proposer/executor as a testnet
 convenience; before any mainnet deploy this must be a real Safe multisig.
+
+## Deferred to a later phase
+
+- **`subscribeWithPermit2`** — the PRD's copy-paste interface (Appendix C.1)
+  lists this alongside `subscribeWithPermit`, for tokens without native
+  EIP-2612 support. USDC has EIP-2612, so it isn't needed yet; add it if a
+  Permit2-only token is allowlisted.
+- **`Upgrade.s.sol`** — no upgrade has been performed yet, so there's nothing
+  to script. `CheckStorageLayout.sh` (the safety check an upgrade script
+  would gate on) is already in place.

@@ -5,6 +5,7 @@ dist/
 packages/contracts/out/
 packages/contracts/cache/
 packages/contracts/broadcast/
+deployments/*
 !deployments/.gitkeep
 .DS_Store
 *.log
