@@ -5,9 +5,10 @@ import { ZodValidationPipe } from "nestjs-zod";
 import { DbModule } from "./db/db.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { AppExceptionFilter } from "./common/http-exception.filter.js";
+import { AuthModule } from "./auth/auth.module.js";
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, envFilePath: ".env.local" }), DbModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true, envFilePath: ".env.local" }), DbModule, AuthModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
