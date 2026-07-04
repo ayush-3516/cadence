@@ -8,6 +8,7 @@ import { AppExceptionFilter } from "./common/http-exception.filter.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { MerchantsModule } from "./merchants/merchants.module.js";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
+import { PlansModule } from "./plans/plans.module.js";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ApiKeysModule } from "./api-keys/api-keys.module.js";
     AuthModule,
     MerchantsModule,
     ApiKeysModule,
+    PlansModule,
   ],
   controllers: [HealthController],
   providers: [
