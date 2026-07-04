@@ -1,9 +1,6 @@
 import { createConfig } from "ponder";
 import { readFileSync } from "node:fs";
-import type { Abi } from "viem";
-import subscriptionManagerAbiJson from "../../packages/shared/abis/SubscriptionManager.json" with { type: "json" };
-
-const subscriptionManagerAbi = subscriptionManagerAbiJson as Abi;
+import { subscriptionManagerAbi } from "../../packages/shared/abis/SubscriptionManager.js";
 
 const deployment = JSON.parse(
   readFileSync(new URL("../../deployments/84532.json", import.meta.url), "utf-8"),
