@@ -18,7 +18,7 @@ export default createConfig({
       chain: "anvilLocal",
       abi: subscriptionManagerAbi,
       address: deployment.subscriptionManager,
-      startBlock: 43659613,
+      startBlock: 43690474,
     },
   },
 });
