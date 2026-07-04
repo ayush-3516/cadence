@@ -6,7 +6,7 @@ import { ApiKeysService } from "./api-keys.service.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
 
 @Module({
-  imports: [AuthModule, forwardRef(() => MerchantsModule)],
+  imports: [forwardRef(() => AuthModule), forwardRef(() => MerchantsModule)],
   controllers: [ApiKeysController],
   providers: [ApiKeysService, ApiKeyGuard],
   exports: [ApiKeysService, ApiKeyGuard],

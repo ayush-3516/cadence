@@ -5,7 +5,7 @@ import { MerchantsController } from "./merchants.controller.js";
 import { MerchantsService } from "./merchants.service.js";
 
 @Module({
-  imports: [AuthModule, forwardRef(() => ApiKeysModule)],
+  imports: [forwardRef(() => AuthModule), forwardRef(() => ApiKeysModule)],
   controllers: [MerchantsController],
   providers: [MerchantsService],
   exports: [MerchantsService],
