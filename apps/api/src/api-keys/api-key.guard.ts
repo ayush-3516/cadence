@@ -9,6 +9,11 @@ export interface ApiKeyContext {
   keyType: "secret" | "publishable";
 }
 
+// Not yet mounted on any route via @UseGuards() in this phase — GET
+// /v1/merchants/me verifies bearer keys inline instead (see
+// MerchantsController.me), since it must also accept a session cookie.
+// This guard is a carried-forward interface for a later sub-project that
+// adds routes authenticated by API key alone.
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
   constructor(private readonly apiKeysService: ApiKeysService) {}

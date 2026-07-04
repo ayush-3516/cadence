@@ -63,6 +63,7 @@ export class MerchantsController {
           message: "The API key is invalid or has been revoked.",
         });
       }
+      await this.apiKeysService.touchLastUsed(keyRow.id, keyRow.lastUsedAt);
       const merchant = await this.merchantsService.findByOwnerAddressById(keyRow.merchantId);
       if (!merchant) {
         throw new AppException({

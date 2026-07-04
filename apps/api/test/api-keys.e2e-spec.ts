@@ -77,14 +77,22 @@ describe("API Keys", () => {
     expect(listResponse.body[0].prefix).toMatch(/^ck_test_sec_/);
   });
 
-  it("authenticates GET /v1/merchants/me using a created secret key", async () => {
+  it("authenticates GET /v1/merchants/me using a created secret key, and records last_used_at", async () => {
     const { cookie } = await signInAndCreateMerchant(server);
     const createResponse = await request(server).post("/v1/api-keys").set("Cookie", cookie).send({ type: "secret" });
-    const { key } = createResponse.body;
+    const { id, key } = createResponse.body;
+
+    const beforeList = await request(server).get("/v1/api-keys").set("Cookie", cookie);
+    const beforeKey = beforeList.body.find((row: { id: string }) => row.id === id);
+    expect(beforeKey.lastUsedAt).toBeNull();
 
     const meResponse = await request(server).get("/v1/merchants/me").set("Authorization", `Bearer ${key}`);
     expect(meResponse.status).toBe(200);
     expect(meResponse.body.name).toBe("Test Co");
+
+    const afterList = await request(server).get("/v1/api-keys").set("Cookie", cookie);
+    const afterKey = afterList.body.find((row: { id: string }) => row.id === id);
+    expect(afterKey.lastUsedAt).not.toBeNull();
   });
 
   it("rejects a revoked key", async () => {
