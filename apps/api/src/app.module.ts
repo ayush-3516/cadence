@@ -6,9 +6,15 @@ import { DbModule } from "./db/db.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { AppExceptionFilter } from "./common/http-exception.filter.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { MerchantsModule } from "./merchants/merchants.module.js";
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, envFilePath: ".env.local" }), DbModule, AuthModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ".env.local" }),
+    DbModule,
+    AuthModule,
+    MerchantsModule,
+  ],
   controllers: [HealthController],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
