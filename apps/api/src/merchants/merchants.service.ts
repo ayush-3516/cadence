@@ -36,4 +36,9 @@ export class MerchantsService {
       .where(and(eq(schema.merchant.ownerAddress, ownerAddress), eq(schema.merchant.livemode, livemode)));
     return found;
   }
+
+  async findByOwnerAddressById(merchantId: string): Promise<Merchant | undefined> {
+    const [found] = await this.db.select().from(schema.merchant).where(eq(schema.merchant.id, merchantId));
+    return found;
+  }
 }
