@@ -2,9 +2,10 @@
   "name": "@cadence/db",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
-  "main": "./src/client.ts",
+  "main": "./dist/client.js",
+  "types": "./dist/client.d.ts",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "typecheck": "tsc --noEmit"
