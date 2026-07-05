@@ -8,5 +8,6 @@ import { SubscriptionsService } from "./subscriptions.service.js";
   imports: [AuthModule, forwardRef(() => MerchantsModule)],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService],
+  exports: [SubscriptionsService],
 })
 export class SubscriptionsModule {}
