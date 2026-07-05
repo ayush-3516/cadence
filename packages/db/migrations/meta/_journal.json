@@ -8,6 +8,13 @@
       "when": 1783159860081,
       "tag": "0000_friendly_catseye",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783197063770,
+      "tag": "0001_add_plan_meta",
+      "breakpoints": true
     }
   ]
 }

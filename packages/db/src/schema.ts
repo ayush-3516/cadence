@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const apiKeyType = pgEnum("api_key_type", ["publishable", "secret"]);
@@ -35,3 +35,14 @@ export const apiKey = pgTable(
     index("api_key_key_hash_idx").on(table.keyHash),
   ],
 );
+
+export const planMeta = pgTable("plan_meta", {
+  onchainPlanId: text("onchain_plan_id").primaryKey(),
+  merchantId: uuid("merchant_id").notNull().references(() => merchant.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  dunningLadder: jsonb("dunning_ladder").notNull().default(sql`'["1d","3d","5d","7d"]'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
