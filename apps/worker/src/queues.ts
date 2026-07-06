@@ -18,6 +18,18 @@ export interface ChargeJobData {
   chainId: number;
 }
 
+// BullMQ's Job.validateOptions rejects any custom jobId containing a ":"
+// unless it splits into exactly 3 segments (a legacy compatibility rule for
+// old repeatable-job ids) — see bullmq's job.js. An ISO timestamp contains
+// two colons of its own (e.g. "2026-07-06T18:46:37.000Z"), so naively joining
+// `${subId}:${periodEnd.toISOString()}` produces 4 segments and throws at
+// enqueue time for every due subscription. Colons are stripped entirely here
+// so the id is always colon-free (0 segments when split), which is always
+// accepted, while remaining unique per (subId, periodEnd) pair.
+export function chargeJobId(onchainSubId: string, periodEnd: Date): string {
+  return `${onchainSubId}-${periodEnd.toISOString().replace(/[:.]/g, "")}`;
+}
+
 export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
   const connection = { connection: redis };
 
@@ -42,7 +54,7 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
       await chargeQueue.add(
         "charge",
         { subId: sub.onchainSubId, periodEnd: sub.currentPeriodEnd.toISOString(), chainId: config.chainId },
-        { jobId: `${sub.onchainSubId}:${sub.currentPeriodEnd.toISOString()}` },
+        { jobId: chargeJobId(sub.onchainSubId, sub.currentPeriodEnd) },
       );
     }
   }
