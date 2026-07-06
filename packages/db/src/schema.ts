@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb, numeric, smallint } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb, numeric, smallint, integer } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const apiKeyType = pgEnum("api_key_type", ["publishable", "secret"]);
@@ -68,3 +68,61 @@ export const dunningState = pgTable("dunning_state", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const webhookStatusEnum = pgEnum("webhook_status", ["enabled", "disabled"]);
+export const deliveryStatusEnum = pgEnum("delivery_status", ["pending", "succeeded", "failed", "dead"]);
+
+export const event = pgTable(
+  "event",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    merchantId: uuid("merchant_id").notNull().references(() => merchant.id),
+    type: text("type").notNull(),
+    data: jsonb("data").notNull(),
+    onchainTxHash: text("onchain_tx_hash"),
+    livemode: boolean("livemode").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("event_merchant_id_created_at_idx").on(table.merchantId, table.createdAt),
+    index("event_type_idx").on(table.type),
+  ],
+);
+
+export const webhookEndpoint = pgTable(
+  "webhook_endpoint",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    merchantId: uuid("merchant_id").notNull().references(() => merchant.id),
+    url: text("url").notNull(),
+    signingSecret: text("signing_secret").notNull(),
+    enabledEvents: jsonb("enabled_events").notNull().default(sql`'["*"]'::jsonb`),
+    status: webhookStatusEnum("status").notNull().default("enabled"),
+    livemode: boolean("livemode").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("webhook_endpoint_merchant_id_idx").on(table.merchantId)],
+);
+
+export const webhookDelivery = pgTable(
+  "webhook_delivery",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    endpointId: uuid("endpoint_id").notNull().references(() => webhookEndpoint.id),
+    eventId: uuid("event_id").notNull().references(() => event.id),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: deliveryStatusEnum("status").notNull().default("pending"),
+    attempts: smallint("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    responseCode: integer("response_code"),
+    responseBody: text("response_body"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("webhook_delivery_endpoint_id_event_id_unique").on(table.endpointId, table.eventId),
+    index("webhook_delivery_status_next_attempt_at_idx").on(table.status, table.nextAttemptAt),
+  ],
+);
