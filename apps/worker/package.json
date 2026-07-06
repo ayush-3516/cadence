@@ -1,5 +1,28 @@
 {
   "name": "@cadence/worker",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cadence/db": "workspace:*",
+    "@cadence/shared": "workspace:*",
+    "bullmq": "^5.34.0",
+    "drizzle-orm": "0.45.2",
+    "ioredis": "5.10.1",
+    "viem": "^2.21.3"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.0.4",
+    "@testcontainers/redis": "^12.0.4",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.0"
+  }
 }
