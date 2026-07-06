@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb, numeric, smallint } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const apiKeyType = pgEnum("api_key_type", ["publishable", "secret"]);
@@ -58,3 +58,13 @@ export const customer = pgTable(
   },
   (table) => [unique("customer_merchant_id_address_unique").on(table.merchantId, table.address)],
 );
+
+export const dunningState = pgTable("dunning_state", {
+  onchainSubId: numeric("onchain_sub_id", { precision: 78, scale: 0 }).primaryKey(),
+  attempt: smallint("attempt").notNull().default(1),
+  nextRetryAt: timestamp("next_retry_at", { withTimezone: true }).notNull(),
+  exhausted: boolean("exhausted").notNull().default(false),
+  ladder: jsonb("ladder").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
