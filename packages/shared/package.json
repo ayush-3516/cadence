@@ -1,5 +1,14 @@
 {
   "name": "@cadence/shared",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "main": "./dist/SubscriptionManager.js",
+  "types": "./dist/SubscriptionManager.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
 }

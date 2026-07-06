@@ -1,5 +1,5 @@
 import type { PublicClient, WalletClient } from "viem";
-import { subscriptionManagerAbi } from "../../../packages/shared/abis/SubscriptionManager.js";
+import { subscriptionManagerAbi } from "@cadence/shared";
 import type { NonceManager } from "./nonce-manager.js";
 
 export interface ChargeSubmitterDeps {
