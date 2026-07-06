@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { execSync } from "node:child_process";
 import path from "node:path";
-import { createDbClient, onchainSchema, type DbClient } from "@cadence/db";
+import { createDbClient, schema, onchainSchema, type DbClient } from "@cadence/db";
 import { findDueSubscriptions } from "../src/due-query.js";
 
 describe("findDueSubscriptions", () => {
@@ -73,11 +73,67 @@ describe("findDueSubscriptions", () => {
     expect(due.map((d) => d.onchainSubId)).not.toContain("3");
   });
 
-  it("includes a past_due subscription unconditionally (no dunning gate exists yet)", async () => {
+  it("includes a past_due subscription with no dunning_state row yet", async () => {
     await seedPlanAndSub({ onchainSubId: "4", status: "past_due", currentPeriodEnd: new Date(Date.now() - 60_000) });
 
     const due = await findDueSubscriptions(db, { chainId: 84532, batchSize: 100 });
     expect(due.map((d) => d.onchainSubId)).toContain("4");
+  });
+
+  it("excludes a past_due subscription whose dunning_state.next_retry_at is in the future", async () => {
+    await seedPlanAndSub({ onchainSubId: "40", status: "past_due", currentPeriodEnd: new Date(Date.now() - 60_000) });
+    await db.insert(schema.dunningState).values({
+      onchainSubId: "40",
+      attempt: 1,
+      nextRetryAt: new Date(Date.now() + 86_400_000),
+      exhausted: false,
+      ladder: ["1d", "3d", "5d", "7d"],
+    });
+
+    const due = await findDueSubscriptions(db, { chainId: 84532, batchSize: 100 });
+    expect(due.map((d) => d.onchainSubId)).not.toContain("40");
+  });
+
+  it("includes a past_due subscription whose dunning_state.next_retry_at has elapsed", async () => {
+    await seedPlanAndSub({ onchainSubId: "41", status: "past_due", currentPeriodEnd: new Date(Date.now() - 60_000) });
+    await db.insert(schema.dunningState).values({
+      onchainSubId: "41",
+      attempt: 1,
+      nextRetryAt: new Date(Date.now() - 1000),
+      exhausted: false,
+      ladder: ["1d", "3d", "5d", "7d"],
+    });
+
+    const due = await findDueSubscriptions(db, { chainId: 84532, batchSize: 100 });
+    expect(due.map((d) => d.onchainSubId)).toContain("41");
+  });
+
+  it("excludes a past_due subscription whose dunning_state is exhausted, even if next_retry_at has elapsed", async () => {
+    await seedPlanAndSub({ onchainSubId: "42", status: "past_due", currentPeriodEnd: new Date(Date.now() - 60_000) });
+    await db.insert(schema.dunningState).values({
+      onchainSubId: "42",
+      attempt: 4,
+      nextRetryAt: new Date(Date.now() - 1000),
+      exhausted: true,
+      ladder: ["1d", "3d", "5d", "7d"],
+    });
+
+    const due = await findDueSubscriptions(db, { chainId: 84532, batchSize: 100 });
+    expect(due.map((d) => d.onchainSubId)).not.toContain("42");
+  });
+
+  it("active and trialing subscriptions are unaffected by dunning_state presence", async () => {
+    await seedPlanAndSub({ onchainSubId: "43", status: "active", currentPeriodEnd: new Date(Date.now() - 60_000) });
+    await db.insert(schema.dunningState).values({
+      onchainSubId: "43",
+      attempt: 4,
+      nextRetryAt: new Date(Date.now() + 86_400_000),
+      exhausted: true,
+      ladder: ["1d", "3d", "5d", "7d"],
+    });
+
+    const due = await findDueSubscriptions(db, { chainId: 84532, batchSize: 100 });
+    expect(due.map((d) => d.onchainSubId)).toContain("43");
   });
 
   it("respects the chainId filter", async () => {

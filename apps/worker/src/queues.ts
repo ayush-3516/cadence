@@ -4,6 +4,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import type { DbClient } from "@cadence/db";
 import type { WorkerConfig } from "./config.js";
 import { findDueSubscriptions } from "./due-query.js";
+import { reconcileDunningState } from "./dunning.js";
 import { acquireChargeLock, releaseChargeLock } from "./charge-lock.js";
 import { createNonceManager, type NonceManager } from "./nonce-manager.js";
 import { submitCharge } from "./charge-submitter.js";
@@ -49,6 +50,7 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
   }
 
   async function scheduleDueCharges(): Promise<void> {
+    await reconcileDunningState(db, config.chainId);
     const due = await findDueSubscriptions(db, { chainId: config.chainId, batchSize: 100 });
     for (const sub of due) {
       await chargeQueue.add(
