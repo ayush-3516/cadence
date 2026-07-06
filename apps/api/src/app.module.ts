@@ -10,6 +10,7 @@ import { MerchantsModule } from "./merchants/merchants.module.js";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { PlansModule } from "./plans/plans.module.js";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module.js";
+import { CustomersModule } from "./customers/customers.module.js";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SubscriptionsModule } from "./subscriptions/subscriptions.module.js";
     ApiKeysModule,
     PlansModule,
     SubscriptionsModule,
+    CustomersModule,
   ],
   controllers: [HealthController],
   providers: [

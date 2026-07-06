@@ -46,3 +46,15 @@ export const planMeta = pgTable("plan_meta", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const customer = pgTable(
+  "customer",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    merchantId: uuid("merchant_id").notNull().references(() => merchant.id),
+    address: text("address").notNull(),
+    email: text("email"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("customer_merchant_id_address_unique").on(table.merchantId, table.address)],
+);

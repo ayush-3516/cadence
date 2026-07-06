@@ -15,6 +15,13 @@
       "when": 1783197063770,
       "tag": "0001_add_plan_meta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783255580813,
+      "tag": "0002_add_customer",
+      "breakpoints": true
     }
   ]
 }
