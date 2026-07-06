@@ -1,5 +1,5 @@
-import { and, asc, eq, inArray, lte } from "drizzle-orm";
-import { onchainSchema } from "@cadence/db";
+import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { onchainSchema, schema } from "@cadence/db";
 import type { DbClient } from "@cadence/db";
 
 export interface DueSubscription {
@@ -17,11 +17,21 @@ export async function findDueSubscriptions(
       currentPeriodEnd: onchainSchema.onchainSubscription.currentPeriodEnd,
     })
     .from(onchainSchema.onchainSubscription)
+    .leftJoin(schema.dunningState, eq(onchainSchema.onchainSubscription.onchainSubId, schema.dunningState.onchainSubId))
     .where(
       and(
-        inArray(onchainSchema.onchainSubscription.status, ["active", "trialing", "past_due"]),
         lte(onchainSchema.onchainSubscription.currentPeriodEnd, new Date()),
         eq(onchainSchema.onchainSubscription.chainId, params.chainId),
+        or(
+          inArray(onchainSchema.onchainSubscription.status, ["active", "trialing"]),
+          and(
+            eq(onchainSchema.onchainSubscription.status, "past_due"),
+            or(
+              isNull(schema.dunningState.onchainSubId),
+              and(lte(schema.dunningState.nextRetryAt, new Date()), eq(schema.dunningState.exhausted, false)),
+            ),
+          ),
+        ),
       ),
     )
     .orderBy(asc(onchainSchema.onchainSubscription.currentPeriodEnd))
