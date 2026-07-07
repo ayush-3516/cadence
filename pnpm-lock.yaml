@@ -13,6 +13,9 @@ importers:
       '@cadence/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@cadence/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.2
         version: 11.0.2

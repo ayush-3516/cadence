@@ -26,7 +26,8 @@
     "rxjs": "^7.8.1",
     "drizzle-orm": "0.45.2",
     "fastify": "^5.8.5",
-    "@cadence/db": "workspace:*"
+    "@cadence/db": "workspace:*",
+    "@cadence/shared": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.23",

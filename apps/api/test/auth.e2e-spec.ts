@@ -18,6 +18,7 @@ describe("SIWE auth flow", () => {
     const connectionUri = await startTestDatabase();
     process.env.DATABASE_URL = connectionUri;
     process.env.JWT_SECRET = "test-secret";
+    process.env.WEBHOOK_SIGNING_ROTATION_KEY = "test-rotation-key-0123456789abcd";
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
