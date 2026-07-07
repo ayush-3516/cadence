@@ -12,6 +12,7 @@ export const merchant = pgTable(
     livemode: boolean("livemode").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    invoiceSequence: integer("invoice_sequence").notNull().default(0),
   },
   (table) => [unique("merchant_owner_address_livemode_unique").on(table.ownerAddress, table.livemode)],
 );
@@ -124,5 +125,28 @@ export const webhookDelivery = pgTable(
   (table) => [
     unique("webhook_delivery_endpoint_id_event_id_unique").on(table.endpointId, table.eventId),
     index("webhook_delivery_status_next_attempt_at_idx").on(table.status, table.nextAttemptAt),
+  ],
+);
+
+export const invoice = pgTable(
+  "invoice",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    merchantId: uuid("merchant_id").notNull().references(() => merchant.id),
+    number: text("number").notNull(),
+    pdfUrl: text("pdf_url"),
+    txHash: text("tx_hash").notNull(),
+    amount: numeric("amount", { precision: 78, scale: 0 }).notNull(),
+    platformFee: numeric("platform_fee", { precision: 78, scale: 0 }).notNull(),
+    net: numeric("net", { precision: 78, scale: 0 }).notNull(),
+    onchainSubId: numeric("onchain_sub_id", { precision: 78, scale: 0 }).notNull(),
+    onchainPlanId: numeric("onchain_plan_id", { precision: 78, scale: 0 }).notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("invoice_merchant_id_number_unique").on(table.merchantId, table.number),
+    index("invoice_merchant_id_created_at_idx").on(table.merchantId, table.createdAt),
+    index("invoice_onchain_sub_id_idx").on(table.onchainSubId),
   ],
 );
