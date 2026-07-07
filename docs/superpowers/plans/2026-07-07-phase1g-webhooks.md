@@ -1637,7 +1637,7 @@ Create `apps/api/src/webhooks/webhook-deliveries.service.ts`:
 
 ```typescript
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { schema } from "@cadence/db";
 import type { DbClient } from "@cadence/db";
 import { DB_CLIENT } from "../db/db.module.js";
@@ -1663,13 +1663,44 @@ export class WebhookDeliveriesService {
 
     const conditions = [inArray(schema.webhookDelivery.endpointId, endpointIds)];
     if (params.status) conditions.push(eq(schema.webhookDelivery.status, params.status as "pending" | "succeeded" | "failed" | "dead"));
-    if (params.startingAfter !== null) conditions.push(gt(schema.webhookDelivery.id, params.startingAfter));
+
+    // `webhookDelivery.id` is a random gen_random_uuid() UUID, not a sortable value — gt(id)+asc(id)
+    // alone would be semantically meaningless (see Task 5's WebhookEndpointsService, where this
+    // exact mistake was made and fixed). Page by (createdAt, id) instead: createdAt gives real
+    // chronological order, id is only a tiebreaker for two rows sharing a timestamp.
+    //
+    // Do NOT round-trip the cursor row's createdAt through a JS Date and rebind it as a query
+    // parameter — `timestamp(..., { withTimezone: true })` has no explicit Drizzle `mode`, so it
+    // defaults to mapping Postgres `timestamptz` (microsecond precision) to a JS `Date` (millisecond
+    // precision). Reading the value out and back in as a bind parameter silently truncates it
+    // downward, which makes the cursor row satisfy `createdAt > <truncated cursor>` against its own
+    // real value and reappear on the next page (this exact bug was found and fixed via a correlated
+    // subquery in Task 5's post-review fix commit — reproduce that approach here from the start
+    // rather than the naive JS-Date-roundtrip version).
+    if (params.startingAfter !== null) {
+      const [existsRow] = await this.db
+        .select({ id: schema.webhookDelivery.id })
+        .from(schema.webhookDelivery)
+        .where(and(eq(schema.webhookDelivery.id, params.startingAfter), inArray(schema.webhookDelivery.endpointId, endpointIds)));
+      if (existsRow) {
+        const cursorCreatedAt = this.db
+          .select({ createdAt: schema.webhookDelivery.createdAt })
+          .from(schema.webhookDelivery)
+          .where(eq(schema.webhookDelivery.id, params.startingAfter));
+        conditions.push(
+          or(
+            sql`${schema.webhookDelivery.createdAt} > (${cursorCreatedAt})`,
+            and(sql`${schema.webhookDelivery.createdAt} = (${cursorCreatedAt})`, gt(schema.webhookDelivery.id, params.startingAfter)),
+          )!,
+        );
+      }
+    }
 
     return this.db
       .select()
       .from(schema.webhookDelivery)
       .where(and(...conditions))
-      .orderBy(asc(schema.webhookDelivery.id))
+      .orderBy(asc(schema.webhookDelivery.createdAt), asc(schema.webhookDelivery.id))
       .limit(params.limit + 1);
   }
 
@@ -1792,3 +1823,5 @@ git commit -m "Add webhook-delivery list and replay endpoints"
 **Gap found and fixed during self-review:** Task 3's plan for `dunning.ts` required threading a THIRD parameter (`enqueueWebhookDelivery`) through `reconcileDunningState`/`createRowsForNewFailures`/`advanceOrExhaustRepeatFailures`'s signatures — all three were re-checked to confirm the parameter is added consistently to all three (not just the outermost `reconcileDunningState`), and Task 3's Step 7 explicitly calls out updating the EXISTING `dunning.test.ts` (Phase 1f) call sites to pass a no-op callback, so that test file's 11 pre-existing tests keep passing rather than breaking on a changed function signature.
 
 **A second gap found and fixed during self-review:** an initial draft of Task 5's `WebhookEndpointsController.list` and Task 6's `WebhookDeliveriesController.list`/`WebhookDeliveriesService.listForMerchant` fetched ALL matching rows from the database unbounded, then applied `limit`/`starting_after` filtering in application code (Task 6's draft even hand-rolled `limit` parsing without calling `parsePaginationQuery` at all, so it had no `invalid_limit` validation). This diverges from every other list endpoint in this codebase (Phases 1c/1d), which push `LIMIT`/cursor filtering down into the SQL query itself via `.orderBy(asc(...)).limit(params.limit + 1)`. Fixed by changing both services' `listForMerchant` signatures to accept `{ limit, startingAfter }` (matching `findDueSubscriptions`'s and `PlansService.list`'s established shape) and moving the `gt(...)`/`orderBy(asc(...))`/`.limit(...)` logic into the SQL query, and fixing both controllers to call `parsePaginationQuery` uniformly. This matters most for `WebhookDeliveriesService` (delivery rows accumulate per-event and could realistically number in the thousands for an active merchant) and is a correctness/consistency fix for `WebhookEndpointsService` too (endpoints are few per merchant in practice, so the severity there was lower, but the inconsistency with the rest of the codebase's pagination convention was still real).
+
+**A third gap found post-Task-5-review and fixed in this plan before Task 6 was dispatched:** Task 5's implementation of the above pagination fix used `gt(schema.webhookEndpoint.id, startingAfter)` + `orderBy(asc(id))`, mirroring `PlansService.list`'s/`findDueSubscriptions`'s established shape — but that shape is only correct when the cursor column is a genuinely sortable, monotonically-assigned value (as `onchainPlan.onchainPlanId` is, being a sequential on-chain-assigned integer). `webhook_endpoint.id`/`webhook_delivery.id` are `uuid` columns defaulting to Postgres `gen_random_uuid()` — random UUIDv4s with no relationship to insertion order. `gt(id)`/`asc(id)` cursor comparisons over a random UUID are semantically meaningless: pages can skip or repeat rows unrelated to creation order. Task 5's own task-scoped review caught this (confirmed via cross-codebase comparison that no other service applies this idiom to a random-UUID primary key) and it was fixed there via a follow-up commit using a compound `(createdAt, id)` cursor: order by `asc(createdAt), asc(id)`, and filter by resolving the cursor row's `createdAt` first, then `or(gt(createdAt, cursorCreatedAt), and(eq(createdAt, cursorCreatedAt), gt(id, cursorId)))` — `createdAt` provides real chronological ordering, `id` is only a tiebreaker for the rare case of two rows sharing a timestamp. The external API contract is unchanged (the opaque cursor is still just the row's `id`). Task 6's `WebhookDeliveriesService.listForMerchant` above has been updated in this plan document to use the same compound-cursor pattern from the start, rather than repeating Task 5's original mistake and requiring a second post-hoc fix.
