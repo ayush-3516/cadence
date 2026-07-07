@@ -171,6 +171,14 @@ describe("Charge flow e2e", () => {
       schedulerIntervalMs: 300_000,
       subscriptionManagerAddress: contracts.subscriptionManager,
       webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
+      feeRegistryAddress: "0x0000000000000000000000000000000000000000",
+      s3Endpoint: "http://localhost:9000",
+      s3Bucket: "cadence-invoices-test",
+      s3AccessKeyId: "minioadmin",
+      s3SecretAccessKey: "minioadmin",
+      s3Region: "auto",
+      s3ForcePathStyle: true,
+      s3PublicBaseUrl: "http://localhost:9000/cadence-invoices-test",
     };
     const { scheduleDueCharges, startChargeWorker } = createQueues(config, db, redis);
     const worker = startChargeWorker();
@@ -222,6 +230,14 @@ describe("Charge flow e2e", () => {
       schedulerIntervalMs: 300_000,
       subscriptionManagerAddress: contracts.subscriptionManager,
       webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
+      feeRegistryAddress: "0x0000000000000000000000000000000000000000",
+      s3Endpoint: "http://localhost:9000",
+      s3Bucket: "cadence-invoices-test",
+      s3AccessKeyId: "minioadmin",
+      s3SecretAccessKey: "minioadmin",
+      s3Region: "auto",
+      s3ForcePathStyle: true,
+      s3PublicBaseUrl: "http://localhost:9000/cadence-invoices-test",
     };
     const { chargeQueue, startChargeWorker } = createQueues(config, db, redis);
     const worker = startChargeWorker();

@@ -8,6 +8,11 @@ const REQUIRED_ENV = {
   RPC_URL_HTTP: "http://localhost:8545",
   CHAIN_ID: "84532",
   WEBHOOK_SIGNING_ROTATION_KEY: "0123456789abcdef0123456789abcdef",
+  S3_ENDPOINT: "http://localhost:9000",
+  S3_BUCKET: "cadence-invoices-dev",
+  S3_ACCESS_KEY_ID: "minioadmin",
+  S3_SECRET_ACCESS_KEY: "minioadmin",
+  S3_PUBLIC_BASE_URL: "http://localhost:9000/cadence-invoices-dev",
 };
 
 describe("loadConfig", () => {
