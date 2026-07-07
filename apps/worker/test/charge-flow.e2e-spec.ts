@@ -170,6 +170,7 @@ describe("Charge flow e2e", () => {
       chainId: 84532,
       schedulerIntervalMs: 300_000,
       subscriptionManagerAddress: contracts.subscriptionManager,
+      webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
     };
     const { scheduleDueCharges, startChargeWorker } = createQueues(config, db, redis);
     const worker = startChargeWorker();
@@ -220,6 +221,7 @@ describe("Charge flow e2e", () => {
       chainId: 84532,
       schedulerIntervalMs: 300_000,
       subscriptionManagerAddress: contracts.subscriptionManager,
+      webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
     };
     const { chargeQueue, startChargeWorker } = createQueues(config, db, redis);
     const worker = startChargeWorker();

@@ -10,6 +10,7 @@ export interface WorkerConfig {
   chainId: number;
   schedulerIntervalMs: number;
   subscriptionManagerAddress: `0x${string}`;
+  webhookSigningRotationKey: string;
 }
 
 function requireEnv(name: string): string {
@@ -44,5 +45,6 @@ export function loadConfig(): WorkerConfig {
       ? Number(process.env.CHARGE_SCHEDULER_INTERVAL_MS)
       : 300_000,
     subscriptionManagerAddress: deployment.subscriptionManager as `0x${string}`,
+    webhookSigningRotationKey: requireEnv("WEBHOOK_SIGNING_ROTATION_KEY"),
   };
 }
