@@ -5,10 +5,12 @@ import { MerchantsModule } from "../merchants/merchants.module.js";
 import { DB_CLIENT } from "../db/db.module.js";
 import { WebhookEndpointsController } from "./webhook-endpoints.controller.js";
 import { WebhookEndpointsService } from "./webhook-endpoints.service.js";
+import { WebhookDeliveriesController } from "./webhook-deliveries.controller.js";
+import { WebhookDeliveriesService } from "./webhook-deliveries.service.js";
 
 @Module({
   imports: [AuthModule, forwardRef(() => MerchantsModule), ConfigModule],
-  controllers: [WebhookEndpointsController],
+  controllers: [WebhookEndpointsController, WebhookDeliveriesController],
   providers: [
     {
       provide: WebhookEndpointsService,
@@ -16,7 +18,8 @@ import { WebhookEndpointsService } from "./webhook-endpoints.service.js";
       useFactory: (dbClient: unknown, config: ConfigService) =>
         new WebhookEndpointsService(dbClient as never, config.getOrThrow<string>("WEBHOOK_SIGNING_ROTATION_KEY")),
     },
+    WebhookDeliveriesService,
   ],
-  exports: [WebhookEndpointsService],
+  exports: [WebhookEndpointsService, WebhookDeliveriesService],
 })
 export class WebhooksModule {}
