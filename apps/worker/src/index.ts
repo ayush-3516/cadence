@@ -9,7 +9,7 @@ async function main() {
   const db = createDbClient(config.databaseUrl);
   const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
 
-  const { chargeSchedulerQueue, scheduleDueCharges, startChargeWorker } = createQueues(config, db, redis);
+  const { chargeSchedulerQueue, scheduleDueCharges, startChargeWorker, startWebhookWorker } = createQueues(config, db, redis);
 
   await chargeSchedulerQueue.upsertJobScheduler(
     `${CHARGE_SCHEDULER_QUEUE_NAME}-repeat`,
@@ -26,6 +26,7 @@ async function main() {
   );
 
   const chargeWorker = startChargeWorker();
+  const webhookWorker = startWebhookWorker();
 
   console.log(`Worker started. Scheduler interval: ${config.schedulerIntervalMs}ms.`);
 
@@ -33,6 +34,7 @@ async function main() {
     console.log("Shutting down...");
     await schedulerQueueWorker.close();
     await chargeWorker.close();
+    await webhookWorker.close();
     await redis.quit();
     process.exit(0);
   }

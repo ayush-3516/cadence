@@ -1,22 +1,30 @@
 import { Queue, Worker, type Job } from "bullmq";
 import { createWalletClient, createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import type { DbClient } from "@cadence/db";
+import { and, eq } from "drizzle-orm";
+import { schema, onchainSchema, type DbClient } from "@cadence/db";
 import type { WorkerConfig } from "./config.js";
 import { findDueSubscriptions } from "./due-query.js";
 import { reconcileDunningState } from "./dunning.js";
 import { acquireChargeLock, releaseChargeLock } from "./charge-lock.js";
 import { createNonceManager, type NonceManager } from "./nonce-manager.js";
 import { submitCharge } from "./charge-submitter.js";
+import { emitEvent } from "./events.js";
+import { deliverWebhook } from "./webhook-delivery.js";
 import type { Redis } from "ioredis";
 
 export const CHARGE_SCHEDULER_QUEUE_NAME = "charge-scheduler";
 export const CHARGE_QUEUE_NAME = "charge-queue";
+export const WEBHOOK_QUEUE_NAME = "webhook-queue";
 
 export interface ChargeJobData {
   subId: string;
   periodEnd: string; // ISO string — BullMQ job data must be JSON-serializable, so Date is not usable directly
   chainId: number;
+}
+
+export interface WebhookJobData {
+  deliveryId: string;
 }
 
 // BullMQ's Job.validateOptions rejects any custom jobId containing a ":"
@@ -36,6 +44,7 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
 
   const chargeSchedulerQueue = new Queue(CHARGE_SCHEDULER_QUEUE_NAME, connection);
   const chargeQueue = new Queue<ChargeJobData>(CHARGE_QUEUE_NAME, connection);
+  const webhookQueue = new Queue<WebhookJobData>(WEBHOOK_QUEUE_NAME, connection);
 
   const account = privateKeyToAccount(config.relayerPrivateKey);
   const publicClient = createPublicClient({ transport: http(config.rpcUrlHttp) });
@@ -50,7 +59,9 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
   }
 
   async function scheduleDueCharges(): Promise<void> {
-    await reconcileDunningState(db, config.chainId);
+    await reconcileDunningState(db, config.chainId, async (deliveryId) => {
+      await webhookQueue.add("deliver", { deliveryId }, { jobId: deliveryId });
+    });
     const due = await findDueSubscriptions(db, { chainId: config.chainId, batchSize: 100 });
     for (const sub of due) {
       await chargeQueue.add(
@@ -75,6 +86,23 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
         job.data.subId,
       );
       console.log(`Charged subId=${job.data.subId} txHash=${txHash}`);
+
+      const [sub] = await db.select().from(onchainSchema.onchainSubscription).where(eq(onchainSchema.onchainSubscription.onchainSubId, job.data.subId));
+      if (sub) {
+        const [plan] = await db.select().from(onchainSchema.onchainPlan).where(eq(onchainSchema.onchainPlan.onchainPlanId, sub.onchainPlanId));
+        if (plan) {
+          const [merchant] = await db.select().from(schema.merchant).where(and(eq(schema.merchant.ownerAddress, plan.merchantAddress), eq(schema.merchant.livemode, false)));
+          if (merchant) {
+            await emitEvent(
+              db,
+              { merchantId: merchant.id, type: "subscription.renewed", data: { onchain_sub_id: job.data.subId, tx_hash: txHash }, onchainTxHash: txHash },
+              async (deliveryId) => {
+                await webhookQueue.add("deliver", { deliveryId }, { jobId: deliveryId });
+              },
+            );
+          }
+        }
+      }
     } finally {
       await releaseChargeLock(redis, job.data.subId, periodEnd);
     }
@@ -88,5 +116,13 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
     });
   }
 
-  return { chargeSchedulerQueue, chargeQueue, scheduleDueCharges, startChargeWorker };
+  async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
+    await deliverWebhook(db, job.data.deliveryId, config.webhookSigningRotationKey);
+  }
+
+  function startWebhookWorker(): Worker<WebhookJobData> {
+    return new Worker<WebhookJobData>(WEBHOOK_QUEUE_NAME, processWebhookJob, connection);
+  }
+
+  return { chargeSchedulerQueue, chargeQueue, webhookQueue, scheduleDueCharges, startChargeWorker, startWebhookWorker };
 }

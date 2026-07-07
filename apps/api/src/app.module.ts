@@ -11,6 +11,7 @@ import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { PlansModule } from "./plans/plans.module.js";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module.js";
 import { CustomersModule } from "./customers/customers.module.js";
+import { WebhooksModule } from "./webhooks/webhooks.module.js";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CustomersModule } from "./customers/customers.module.js";
     PlansModule,
     SubscriptionsModule,
     CustomersModule,
+    WebhooksModule,
   ],
   controllers: [HealthController],
   providers: [

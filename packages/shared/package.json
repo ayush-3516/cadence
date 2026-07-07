@@ -2,13 +2,16 @@
   "name": "@cadence/shared",
   "private": true,
   "version": "0.0.0",
-  "main": "./dist/SubscriptionManager.js",
-  "types": "./dist/SubscriptionManager.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "@types/node": "^20.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.0"
   }
 }

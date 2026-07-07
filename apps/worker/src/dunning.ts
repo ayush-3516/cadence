@@ -1,6 +1,7 @@
 import { and, eq, lte, ne, notInArray, sql } from "drizzle-orm";
 import { schema, onchainSchema } from "@cadence/db";
 import type { DbClient } from "@cadence/db";
+import { emitEvent } from "./events.js";
 
 const DEFAULT_LADDER = ["1d", "3d", "5d", "7d"];
 
@@ -17,13 +18,21 @@ export function parseDuration(value: string): number {
   return amount * msPerUnit;
 }
 
-export async function reconcileDunningState(db: DbClient, chainId: number): Promise<void> {
-  await createRowsForNewFailures(db, chainId);
+export async function reconcileDunningState(
+  db: DbClient,
+  chainId: number,
+  enqueueWebhookDelivery: (deliveryId: string) => Promise<void>,
+): Promise<void> {
+  await createRowsForNewFailures(db, chainId, enqueueWebhookDelivery);
   await deleteRowsForRecoveredSubscriptions(db, chainId);
-  await advanceOrExhaustRepeatFailures(db, chainId);
+  await advanceOrExhaustRepeatFailures(db, chainId, enqueueWebhookDelivery);
 }
 
-async function createRowsForNewFailures(db: DbClient, chainId: number): Promise<void> {
+async function createRowsForNewFailures(
+  db: DbClient,
+  chainId: number,
+  enqueueWebhookDelivery: (deliveryId: string) => Promise<void>,
+): Promise<void> {
   const existingIds = await db.select({ id: schema.dunningState.onchainSubId }).from(schema.dunningState);
   const existingIdSet = existingIds.map((r) => r.id);
 
@@ -64,6 +73,20 @@ async function createRowsForNewFailures(db: DbClient, chainId: number): Promise<
     });
 
     console.log(`dunning: payment_failed subId=${sub.onchainSubId} attempt=1 next_retry_at=${new Date(Date.now() + parseDuration(ladder[0])).toISOString()}`);
+
+    const [merchant] = await db
+      .select()
+      .from(schema.merchant)
+      .where(and(eq(schema.merchant.ownerAddress, plan?.merchantAddress ?? ""), eq(schema.merchant.livemode, false)));
+    if (merchant) {
+      await emitEvent(
+        db,
+        { merchantId: merchant.id, type: "subscription.payment_failed", data: { onchain_sub_id: sub.onchainSubId, attempt: 1 } },
+        async (deliveryId) => {
+          await enqueueWebhookDelivery(deliveryId);
+        },
+      );
+    }
   }
 }
 
@@ -80,7 +103,11 @@ async function deleteRowsForRecoveredSubscriptions(db: DbClient, chainId: number
   }
 }
 
-async function advanceOrExhaustRepeatFailures(db: DbClient, chainId: number): Promise<void> {
+async function advanceOrExhaustRepeatFailures(
+  db: DbClient,
+  chainId: number,
+  enqueueWebhookDelivery: (deliveryId: string) => Promise<void>,
+): Promise<void> {
   const dueForRetryCheck = await db
     .select({ dunning: schema.dunningState, sub: onchainSchema.onchainSubscription })
     .from(schema.dunningState)
@@ -94,7 +121,7 @@ async function advanceOrExhaustRepeatFailures(db: DbClient, chainId: number): Pr
       ),
     );
 
-  for (const { dunning } of dueForRetryCheck) {
+  for (const { dunning, sub } of dueForRetryCheck) {
     const ladder = dunning.ladder as string[];
     if (dunning.attempt < ladder.length) {
       const nextAttempt = dunning.attempt + 1;
@@ -104,6 +131,21 @@ async function advanceOrExhaustRepeatFailures(db: DbClient, chainId: number): Pr
         .set({ attempt: nextAttempt, nextRetryAt, updatedAt: new Date() })
         .where(eq(schema.dunningState.onchainSubId, dunning.onchainSubId));
       console.log(`dunning: payment_failed (retry ${nextAttempt}) subId=${dunning.onchainSubId} next_retry_at=${nextRetryAt.toISOString()}`);
+
+      const [plan] = await db.select().from(onchainSchema.onchainPlan).where(eq(onchainSchema.onchainPlan.onchainPlanId, sub.onchainPlanId));
+      const [merchant] = await db
+        .select()
+        .from(schema.merchant)
+        .where(and(eq(schema.merchant.ownerAddress, plan?.merchantAddress ?? ""), eq(schema.merchant.livemode, false)));
+      if (merchant) {
+        await emitEvent(
+          db,
+          { merchantId: merchant.id, type: "subscription.payment_failed", data: { onchain_sub_id: dunning.onchainSubId, attempt: nextAttempt } },
+          async (deliveryId) => {
+            await enqueueWebhookDelivery(deliveryId);
+          },
+        );
+      }
     } else {
       await db
         .update(schema.dunningState)
