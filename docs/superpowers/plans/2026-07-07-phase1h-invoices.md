@@ -676,6 +676,7 @@ Expected: FAIL — `../src/invoices.js` does not exist.
 Create `apps/worker/src/invoices.ts`:
 
 ```typescript
+import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { schema } from "@cadence/db";
 import type { DbClient } from "@cadence/db";
@@ -732,25 +733,30 @@ export async function generateInvoice(deps: GenerateInvoiceDeps, params: Generat
     chainId: params.chainId,
   });
 
-  const [invoiceRow] = await deps.db
-    .insert(schema.invoice)
-    .values({
-      merchantId: params.merchantId,
-      number,
-      txHash: params.txHash,
-      amount: params.amount.toString(),
-      platformFee: platformFee.toString(),
-      net: net.toString(),
-      onchainSubId: params.onchainSubId,
-      onchainPlanId: params.onchainPlanId,
-    })
-    .returning();
-
-  const key = `invoices/${params.merchantId}/${invoiceRow.id}.pdf`;
+  // Upload BEFORE inserting the invoice row, using a client-generated id, so a render/upload
+  // failure leaves zero rows behind (verified during Task 3's implementation: an earlier
+  // insert-then-upload-then-update ordering left an orphaned row with a null pdf_url whenever
+  // the upload step failed, contradicting this function's own "throws with no partial row"
+  // contract). invoice.id is a Postgres uuid column with a gen_random_uuid() default;
+  // node:crypto's randomUUID() produces a standard RFC 4122 v4 UUID string in the same format,
+  // so supplying it explicitly here is a safe, ordinary override of that default.
+  const invoiceId = randomUUID();
+  const key = `invoices/${params.merchantId}/${invoiceId}.pdf`;
   const uploadedKey = await deps.uploadInvoicePdf(deps.s3Bucket, key, pdfBuffer);
   const pdfUrl = `${deps.s3PublicBaseUrl}/${uploadedKey.replace(deps.s3Bucket + "/", "")}`;
 
-  await deps.db.update(schema.invoice).set({ pdfUrl }).where(eq(schema.invoice.id, invoiceRow.id));
+  await deps.db.insert(schema.invoice).values({
+    id: invoiceId,
+    merchantId: params.merchantId,
+    number,
+    pdfUrl,
+    txHash: params.txHash,
+    amount: params.amount.toString(),
+    platformFee: platformFee.toString(),
+    net: net.toString(),
+    onchainSubId: params.onchainSubId,
+    onchainPlanId: params.onchainPlanId,
+  });
 }
 ```
 
@@ -1552,6 +1558,8 @@ git commit -m "Add invoice list and detail read endpoints"
 **Placeholder scan:** No "TBD"/"TODO"/vague requirements found. One deliberately partial mechanism, explicitly disclosed and justified (not silently glossed over): invoice generation's failure isolation means a failed invoice has NO retry/backfill mechanism in this phase — consistent with the design spec's own "Explicitly out of scope" section, mirroring how Phase 1g's `webhook_delivery` replay was a separate, later addition rather than something the initial webhook tasks needed to solve.
 
 **Type consistency check:** `generateInvoice`'s `GenerateInvoiceDeps`/`GenerateInvoiceParams` interfaces (Task 3) are used identically in its own unit test (Task 3, Step 9) and at its one real call site (Task 3, Step 13's `queues.ts` wiring). `renderInvoicePdf`'s `InvoicePdfParams` interface (Task 3) is defined once and consumed consistently by `invoice-pdf.test.ts`, `invoices.ts`'s internal call, and is NOT redefined in `queues.ts` (queues.ts imports the type only implicitly via `generateInvoice`'s own parameter shape, never duplicating the interface). `InvoiceRow` type alias (Task 5) is defined once in `invoices.service.ts`, consumed by `invoices.controller.ts`'s `toResponse` — not redefined elsewhere. `DeployedContracts`'s new `feeRegistry` field (Task 4) is added once and consumed consistently across both e2e test files that reference it.
+
+**Bug found and fixed during Task 3's implementation (plan text corrected after the fact):** this plan's original Task 3 Step 11 code for `generateInvoice` inserted the invoice row into `schema.invoice` BEFORE calling `uploadInvoicePdf`, then updated `pdfUrl` afterward — but this same plan's Step 9 test #3 ("propagates an error if the render/upload step throws, without persisting a row") asserts the table has ZERO rows after an upload failure. Running the original code against that test produces exactly the contradiction: 1 row persisted, not 0. Task 3's implementer caught this empirically (ran the literal code, watched the test fail this way), fixed it by generating the invoice `id` client-side via `node:crypto`'s `randomUUID()` and reordering the function to upload-before-insert (a single `insert` with `pdfUrl` already resolved, no follow-up `update`), and Task 3's task-scoped reviewer independently re-verified the fix is genuine (not a fabricated excuse), preserves every other constraint (throws on failure, no partial row, `invoiceSequence` still atomically incremented up front even on a later failure — an accepted numbering-gap trade-off, no FK to `onchain_charge`, `invoice.id`'s `uuid` column type accepts a client-generated RFC 4122 v4 string exactly as it would its own `gen_random_uuid()` default). This plan's Task 3 code block above has been corrected to match the shipped, reviewed implementation — Task 4 and Task 5's remaining code (not yet dispatched at the time of this correction) do not reference `generateInvoice`'s internals directly and are unaffected by this change.
 
 **Gap found and fixed during self-review:** an initial pass at this plan had Task 5's `InvoicesController.list` calling `resolveMerchantId` BEFORE checking `auth.keyType === "publishable"` for the `subscriber_required` validation — but `resolveMerchantId` itself calls `this.authContext.resolve(request)` a second time internally, meaning `auth` would be resolved twice per request. Fixed by having `list()` call `this.authContext.resolve(request)` once itself (for the `keyType` check) and ALSO calling `resolveMerchantId(request)` (which resolves `auth` again internally) — this is a minor, accepted duplication (two `authContext.resolve` calls per list request) rather than refactoring `resolveMerchantId` to accept an already-resolved `auth` object, matching Phase 1g's own `WebhookEndpointsController`/`WebhookDeliveriesController` pattern of NOT sharing/optimizing this helper across call sites within a single controller method. This is intentionally left as-is (a correctness-neutral, minor inefficiency) rather than "fixed" into a different shape, since deviating from the established per-controller helper pattern for a performance micro-optimization is exactly the kind of premature refactor this project's conventions avoid.
 
