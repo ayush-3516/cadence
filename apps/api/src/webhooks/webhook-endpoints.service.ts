@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import { schema } from "@cadence/db";
 import type { DbClient } from "@cadence/db";
 import { encryptSecret } from "@cadence/shared";
@@ -41,13 +41,54 @@ export class WebhookEndpointsService {
     params: { limit: number; startingAfter: string | null },
   ): Promise<Omit<WebhookEndpointRow, "signingSecret">[]> {
     const conditions = [eq(schema.webhookEndpoint.merchantId, merchantId)];
-    if (params.startingAfter !== null) conditions.push(gt(schema.webhookEndpoint.id, params.startingAfter));
+
+    if (params.startingAfter !== null) {
+      // `id` is a random UUIDv4 (see schema.ts), so it has no relationship to insertion
+      // order and cannot be used alone as a pagination cursor. We page by the genuinely
+      // chronological `createdAt` column instead, with `id` only as a tiebreaker for the
+      // rare case where two rows share the same `createdAt` timestamp. The external cursor
+      // contract (an opaque `id` string) is unchanged, so we resolve `startingAfter` to its
+      // row's `createdAt` via a correlated subquery rather than reading the value into JS
+      // and rebinding it as a query parameter: drizzle's default "date" mode maps
+      // `timestamptz` to a JS `Date`, which only carries millisecond precision, while
+      // Postgres stores microseconds. Round-tripping through `Date` truncates the cursor's
+      // `createdAt` downward, which made the cursor row satisfy `created_at > <truncated
+      // cursor>` against its own true (higher-precision) stored value and reappear on the
+      // next page. Comparing entirely inside Postgres via subquery avoids that precision
+      // loss.
+      const cursorCreatedAt = this.db
+        .select({ createdAt: schema.webhookEndpoint.createdAt })
+        .from(schema.webhookEndpoint)
+        .where(eq(schema.webhookEndpoint.id, params.startingAfter));
+
+      const [cursorExists] = await this.db
+        .select({ id: schema.webhookEndpoint.id })
+        .from(schema.webhookEndpoint)
+        .where(and(eq(schema.webhookEndpoint.id, params.startingAfter), eq(schema.webhookEndpoint.merchantId, merchantId)));
+
+      // A nonexistent/foreign cursor is treated the same way the rest of the codebase's
+      // pagination (plans/subscriptions/customers services) treats a bad `startingAfter`:
+      // no error is thrown, and the filter simply yields no further rows. Since this cursor
+      // matches nothing, `gt(id, startingAfter)` alone (a condition guaranteed false against
+      // every real UUID that would otherwise be excluded) keeps that "empty tail" behavior
+      // without needing an `AppException`.
+      if (cursorExists) {
+        conditions.push(
+          or(
+            sql`${schema.webhookEndpoint.createdAt} > (${cursorCreatedAt})`,
+            and(sql`${schema.webhookEndpoint.createdAt} = (${cursorCreatedAt})`, gt(schema.webhookEndpoint.id, params.startingAfter)),
+          )!,
+        );
+      } else {
+        conditions.push(gt(schema.webhookEndpoint.id, params.startingAfter));
+      }
+    }
 
     const rows = await this.db
       .select()
       .from(schema.webhookEndpoint)
       .where(and(...conditions))
-      .orderBy(asc(schema.webhookEndpoint.id))
+      .orderBy(asc(schema.webhookEndpoint.createdAt), asc(schema.webhookEndpoint.id))
       .limit(params.limit + 1);
 
     return rows.map(({ signingSecret: _s, ...rest }) => rest);

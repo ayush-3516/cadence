@@ -115,6 +115,34 @@ describe("Webhook Endpoints", () => {
     expect(patchResponse.status).toBe(404);
   });
 
+  it("paginates across multiple pages without skipping or duplicating rows", async () => {
+    const { cookie } = await signInAndCreateMerchant(server);
+    const created: string[] = [];
+    for (const url of ["https://example.com/1", "https://example.com/2", "https://example.com/3"]) {
+      const response = await request(server).post("/v1/webhook-endpoints").set("Cookie", cookie).send({ url });
+      created.push(response.body.id as string);
+    }
+
+    const page1 = await request(server).get("/v1/webhook-endpoints").query({ limit: 2 }).set("Cookie", cookie);
+    expect(page1.status).toBe(200);
+    expect(page1.body.data).toHaveLength(2);
+    expect(page1.body.has_more).toBe(true);
+    expect(page1.body.next_cursor).not.toBeNull();
+
+    const page2 = await request(server)
+      .get("/v1/webhook-endpoints")
+      .query({ limit: 2, starting_after: page1.body.next_cursor })
+      .set("Cookie", cookie);
+    expect(page2.status).toBe(200);
+    expect(page2.body.has_more).toBe(false);
+
+    const allIds = [...page1.body.data, ...page2.body.data].map((row: { id: string }) => row.id);
+    // Every created endpoint appears, and appears exactly once, across both pages.
+    expect(allIds).toHaveLength(3);
+    expect(new Set(allIds).size).toBe(3);
+    expect(new Set(allIds)).toEqual(new Set(created));
+  });
+
   it("rejects a publishable key on every webhook-endpoint route", async () => {
     const { cookie } = await signInAndCreateMerchant(server);
     const pubKey = await createPublishableKey(server, cookie);
