@@ -12,6 +12,7 @@ import { PlansModule } from "./plans/plans.module.js";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module.js";
 import { CustomersModule } from "./customers/customers.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
+import { InvoicesModule } from "./invoices/invoices.module.js";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     SubscriptionsModule,
     CustomersModule,
     WebhooksModule,
+    InvoicesModule,
   ],
   controllers: [HealthController],
   providers: [

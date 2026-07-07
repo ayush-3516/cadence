@@ -3,6 +3,7 @@ import { createWalletClient, createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { and, eq } from "drizzle-orm";
 import { schema, onchainSchema, type DbClient } from "@cadence/db";
+import { feeRegistryAbi } from "@cadence/shared";
 import type { WorkerConfig } from "./config.js";
 import { findDueSubscriptions } from "./due-query.js";
 import { reconcileDunningState } from "./dunning.js";
@@ -11,6 +12,9 @@ import { createNonceManager, type NonceManager } from "./nonce-manager.js";
 import { submitCharge } from "./charge-submitter.js";
 import { emitEvent } from "./events.js";
 import { deliverWebhook } from "./webhook-delivery.js";
+import { generateInvoice } from "./invoices.js";
+import { renderInvoicePdf } from "./invoice-pdf.js";
+import { createS3Client, uploadInvoicePdf as uploadInvoicePdfToClient } from "./invoice-storage.js";
 import type { Redis } from "ioredis";
 
 export const CHARGE_SCHEDULER_QUEUE_NAME = "charge-scheduler";
@@ -49,6 +53,14 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
   const account = privateKeyToAccount(config.relayerPrivateKey);
   const publicClient = createPublicClient({ transport: http(config.rpcUrlHttp) });
   const walletClient = createWalletClient({ account, transport: http(config.rpcUrlHttp) });
+  const s3Client = createS3Client({
+    endpoint: config.s3Endpoint,
+    bucket: config.s3Bucket,
+    accessKeyId: config.s3AccessKeyId,
+    secretAccessKey: config.s3SecretAccessKey,
+    region: config.s3Region,
+    forcePathStyle: config.s3ForcePathStyle,
+  });
 
   let nonceManagerPromise: Promise<NonceManager> | null = null;
   function getNonceManager(): Promise<NonceManager> {
@@ -100,6 +112,52 @@ export function createQueues(config: WorkerConfig, db: DbClient, redis: Redis) {
                 await webhookQueue.add("deliver", { deliveryId }, { jobId: deliveryId });
               },
             );
+
+            // Invoice generation is a best-effort side effect, deliberately isolated from the
+            // charge/webhook outcome above: the on-chain charge already succeeded regardless of
+            // whether a PDF could be produced. A failure here must not throw out of
+            // processChargeJob (which would trigger a BullMQ retry of the WHOLE job, including a
+            // second submitCharge call) and must not block subscription.renewed, which has
+            // already fired above.
+            try {
+              const feeBps = await publicClient.readContract({
+                address: config.feeRegistryAddress,
+                abi: feeRegistryAbi,
+                functionName: "getFeeBps",
+                args: [merchant.ownerAddress as `0x${string}`],
+              });
+              await generateInvoice(
+                {
+                  db,
+                  renderInvoicePdf,
+                  uploadInvoicePdf: (bucket, key, body) => uploadInvoicePdfToClient(s3Client, bucket, key, body),
+                  s3Bucket: config.s3Bucket,
+                  s3PublicBaseUrl: config.s3PublicBaseUrl,
+                },
+                {
+                  merchantId: merchant.id,
+                  merchantName: merchant.name,
+                  subscriberAddress: sub.subscriberAddress,
+                  onchainSubId: job.data.subId,
+                  onchainPlanId: sub.onchainPlanId,
+                  amount: BigInt(plan.amount),
+                  feeBps: BigInt(feeBps),
+                  token: "USDC",
+                  periodEnd,
+                  txHash,
+                  chainId: config.chainId,
+                },
+              );
+              await emitEvent(
+                db,
+                { merchantId: merchant.id, type: "invoice.created", data: { onchain_sub_id: job.data.subId, tx_hash: txHash }, onchainTxHash: txHash },
+                async (deliveryId) => {
+                  await webhookQueue.add("deliver", { deliveryId }, { jobId: deliveryId });
+                },
+              );
+            } catch (err) {
+              console.error(`Invoice generation failed for subId=${job.data.subId} txHash=${txHash}:`, err);
+            }
           }
         }
       }

@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { RedisContainer, StartedRedisContainer } from "@testcontainers/redis";
+import { MinioContainer, StartedMinioContainer } from "@testcontainers/minio";
+import { S3Client, GetObjectCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
 import { execSync } from "node:child_process";
 import path from "node:path";
 import Redis from "ioredis";
-import { createDbClient, onchainSchema, type DbClient } from "@cadence/db";
+import { createDbClient, onchainSchema, schema, type DbClient } from "@cadence/db";
+import { eq } from "drizzle-orm";
 import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { startAnvil, type StartedAnvil } from "./e2e-helpers/anvil.js";
@@ -32,6 +35,8 @@ const erc20Abi = parseAbi([
 const subscriptionManagerAbi = parseAbi([
   "function createPlan(address payoutSplit, address token, uint256 amount, uint40 period, uint40 trialPeriod) external returns (uint256)",
   "function subscribe(uint256 planId) external returns (uint256)",
+  "event PlanCreated(uint256 indexed planId, address indexed merchant, address payoutSplit, address token, uint256 amount, uint40 period, uint40 trialPeriod)",
+  "event Subscribed(uint256 indexed subId, uint256 indexed planId, address indexed subscriber, uint40 currentPeriodEnd, bool trialing)",
 ]);
 
 describe("Charge flow e2e", () => {
@@ -39,6 +44,8 @@ describe("Charge flow e2e", () => {
   let contracts: DeployedContracts;
   let pgContainer: StartedPostgreSqlContainer;
   let redisContainer: StartedRedisContainer;
+  let minioContainer: StartedMinioContainer;
+  let minioClient: S3Client;
   let db: DbClient;
   let redis: Redis;
 
@@ -64,6 +71,15 @@ describe("Charge flow e2e", () => {
     // entrypoint's redis construction in src/index.ts. Without this, creating
     // a BullMQ Worker against this connection throws synchronously.
     redis = new Redis(redisContainer.getConnectionUrl(), { maxRetriesPerRequest: null });
+
+    minioContainer = await new MinioContainer("minio/minio:RELEASE.2024-01-16T16-07-38Z").start();
+    minioClient = new S3Client({
+      endpoint: `http://${minioContainer.getHost()}:${minioContainer.getPort()}`,
+      region: "auto",
+      credentials: { accessKeyId: minioContainer.getUsername(), secretAccessKey: minioContainer.getPassword() },
+      forcePathStyle: true,
+    });
+    await minioClient.send(new CreateBucketCommand({ Bucket: "test-invoices" }));
   }, 120_000);
 
   afterAll(async () => {
@@ -71,6 +87,7 @@ describe("Charge flow e2e", () => {
     await redis.quit();
     await pgContainer.stop();
     await redisContainer.stop();
+    await minioContainer.stop();
     await anvil.stop();
   });
 
@@ -171,6 +188,14 @@ describe("Charge flow e2e", () => {
       schedulerIntervalMs: 300_000,
       subscriptionManagerAddress: contracts.subscriptionManager,
       webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
+      feeRegistryAddress: contracts.feeRegistry,
+      s3Endpoint: `http://${minioContainer.getHost()}:${minioContainer.getPort()}`,
+      s3Bucket: "test-invoices",
+      s3AccessKeyId: minioContainer.getUsername(),
+      s3SecretAccessKey: minioContainer.getPassword(),
+      s3Region: "auto",
+      s3ForcePathStyle: true,
+      s3PublicBaseUrl: `http://${minioContainer.getHost()}:${minioContainer.getPort()}/test-invoices`,
     };
     const { scheduleDueCharges, startChargeWorker } = createQueues(config, db, redis);
     const worker = startChargeWorker();
@@ -222,6 +247,14 @@ describe("Charge flow e2e", () => {
       schedulerIntervalMs: 300_000,
       subscriptionManagerAddress: contracts.subscriptionManager,
       webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
+      feeRegistryAddress: contracts.feeRegistry,
+      s3Endpoint: `http://${minioContainer.getHost()}:${minioContainer.getPort()}`,
+      s3Bucket: "test-invoices",
+      s3AccessKeyId: minioContainer.getUsername(),
+      s3SecretAccessKey: minioContainer.getPassword(),
+      s3Region: "auto",
+      s3ForcePathStyle: true,
+      s3PublicBaseUrl: `http://${minioContainer.getHost()}:${minioContainer.getPort()}/test-invoices`,
     };
     const { chargeQueue, startChargeWorker } = createQueues(config, db, redis);
     const worker = startChargeWorker();
@@ -253,4 +286,165 @@ describe("Charge flow e2e", () => {
 
     await worker.close();
   }, 30_000);
+
+  it("generates and uploads an invoice for a successful charge", async () => {
+    const deployerAccount = privateKeyToAccount(ANVIL_ACCOUNT_0);
+    const subscriberAccount = privateKeyToAccount(ANVIL_ACCOUNT_1);
+    const publicClient = createPublicClient({ transport: http(anvil.rpcUrl) });
+    const deployerWallet = createWalletClient({ account: deployerAccount, transport: http(anvil.rpcUrl) });
+    const subscriberWallet = createWalletClient({ account: subscriberAccount, transport: http(anvil.rpcUrl) });
+
+    const [merchant] = await db
+      .insert(schema.merchant)
+      .values({ name: "Invoice E2E Co", ownerAddress: deployerAccount.address, livemode: false })
+      .returning();
+
+    const amount = 20_000_000n;
+    await deployerWallet.writeContract({
+      address: contracts.usdc,
+      abi: erc20Abi,
+      functionName: "mint",
+      args: [subscriberAccount.address, amount * 3n],
+      chain: null,
+      account: deployerAccount,
+    });
+    await subscriberWallet.writeContract({
+      address: contracts.usdc,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [contracts.subscriptionManager, amount * 3n],
+      chain: null,
+      account: subscriberAccount,
+    });
+
+    const createPlanHash = await deployerWallet.writeContract({
+      address: contracts.subscriptionManager,
+      abi: subscriptionManagerAbi,
+      functionName: "createPlan",
+      args: [deployerAccount.address, contracts.usdc, amount, 2_592_000, 0],
+      chain: null,
+      account: deployerAccount,
+    });
+    await publicClient.waitForTransactionReceipt({ hash: createPlanHash });
+
+    // This test creates its own plan on-chain (planId ids are a monotonic on-chain counter shared
+    // across the whole describe block's single anvil instance — only the first test in this file
+    // actually creates a plan on-chain; the second test only inserts a Postgres-only mirror row
+    // without any real on-chain plan). Read the actual planId back from the chain rather than
+    // hardcoding a guessed number, so this test doesn't silently break if an earlier test in this
+    // file is reordered or another is added before it.
+    const planCreatedLogs = await publicClient.getContractEvents({
+      address: contracts.subscriptionManager,
+      abi: subscriptionManagerAbi,
+      eventName: "PlanCreated",
+      fromBlock: 0n,
+    });
+    const planId = planCreatedLogs[planCreatedLogs.length - 1].args.planId as bigint;
+
+    const subscribeHash = await subscriberWallet.writeContract({
+      address: contracts.subscriptionManager,
+      abi: subscriptionManagerAbi,
+      functionName: "subscribe",
+      args: [planId],
+      chain: null,
+      account: subscriberAccount,
+    });
+    await publicClient.waitForTransactionReceipt({ hash: subscribeHash });
+
+    // subId is a real on-chain counter (independent from planId) assigned by
+    // SubscriptionManager.subscribe() — it must be read back from the Subscribed event rather
+    // than derived/guessed, since submitCharge's on-chain charge(subId) call requires a subId
+    // that genuinely exists on-chain (a fabricated Postgres-mirror-only subId would cause the
+    // real on-chain charge() call to revert, since no such subscription exists).
+    const subscribedLogs = await publicClient.getContractEvents({
+      address: contracts.subscriptionManager,
+      abi: subscriptionManagerAbi,
+      eventName: "Subscribed",
+      fromBlock: 0n,
+    });
+    const onchainSubIdBigint = subscribedLogs[subscribedLogs.length - 1].args.subId as bigint;
+    const subId = onchainSubIdBigint.toString();
+
+    await fetch(anvil.rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "evm_increaseTime", params: [2_592_001], id: 1 }),
+    });
+    await fetch(anvil.rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", method: "evm_mine", params: [], id: 1 }) });
+
+    await db.insert(onchainSchema.onchainPlan).values({
+      onchainPlanId: planId.toString(),
+      merchantAddress: deployerAccount.address,
+      payoutSplit: deployerAccount.address,
+      token: contracts.usdc,
+      amount: amount.toString(),
+      periodSeconds: 2_592_000n,
+      trialSeconds: 0n,
+      active: true,
+      chainId: 84532,
+    });
+    // The real on-chain subId this test just read back from the Subscribed event can collide with
+    // the literal Postgres-only mirror row (onchainSubId "2") inserted by the "does not submit a
+    // second transaction..." test above, which never creates a real on-chain subscription — its
+    // row was only ever needed for that test's own charge-lock assertions and is safe to replace
+    // here rather than causing a primary-key collision on insert.
+    await db.delete(onchainSchema.onchainSubscription).where(eq(onchainSchema.onchainSubscription.onchainSubId, subId));
+    await db.insert(onchainSchema.onchainSubscription).values({
+      onchainSubId: subId,
+      onchainPlanId: planId.toString(),
+      subscriberAddress: subscriberAccount.address,
+      status: "active",
+      currentPeriodEnd: new Date(Date.now() - 60_000),
+      pausedRemaining: 0n,
+      pendingCancel: false,
+      chainId: 84532,
+    });
+
+    const config: WorkerConfig = {
+      databaseUrl: pgContainer.getConnectionUri(),
+      redisUrl: redisContainer.getConnectionUrl(),
+      relayerPrivateKey: ANVIL_ACCOUNT_0,
+      rpcUrlHttp: anvil.rpcUrl,
+      chainId: 84532,
+      schedulerIntervalMs: 300_000,
+      subscriptionManagerAddress: contracts.subscriptionManager,
+      webhookSigningRotationKey: "0123456789abcdef0123456789abcdef",
+      feeRegistryAddress: contracts.feeRegistry,
+      s3Endpoint: `http://${minioContainer.getHost()}:${minioContainer.getPort()}`,
+      s3Bucket: "test-invoices",
+      s3AccessKeyId: minioContainer.getUsername(),
+      s3SecretAccessKey: minioContainer.getPassword(),
+      s3Region: "auto",
+      s3ForcePathStyle: true,
+      s3PublicBaseUrl: `http://${minioContainer.getHost()}:${minioContainer.getPort()}/test-invoices`,
+    };
+    // This test's own dedicated ioredis connection, rather than reusing the describe-level
+    // `redis` shared by the two tests above: BullMQ's Worker/Queue default to NOT treating a
+    // passed-in connection as externally managed (no `shared: true` in this file's `connection`
+    // options), so `worker.close()` in each of those two prior tests calls `.disconnect()` on the
+    // underlying ioredis client — a hard, non-reconnecting disconnect. Reusing that same `redis`
+    // instance here would race against a dead connection instead of proving the real pipeline.
+    const invoiceTestRedis = new Redis(redisContainer.getConnectionUrl(), { maxRetriesPerRequest: null });
+    const { scheduleDueCharges, startChargeWorker } = createQueues(config, db, invoiceTestRedis);
+    const worker = startChargeWorker();
+
+    await scheduleDueCharges();
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+
+    const [invoiceRow] = await db.select().from(schema.invoice).where(eq(schema.invoice.merchantId, merchant.id));
+    expect(invoiceRow).toBeDefined();
+    expect(invoiceRow.number).toBe("CAD-000001");
+    expect(invoiceRow.amount).toBe(amount.toString());
+    expect(BigInt(invoiceRow.platformFee)).toBeGreaterThan(0n); // DEFAULT_FEE_BPS = 75 in Config.sol, so a nonzero fee is expected
+    expect(invoiceRow.pdfUrl).not.toBeNull();
+
+    // Confirm the PDF genuinely landed in MinIO, not just that the DB row claims a URL.
+    const key = invoiceRow.pdfUrl!.replace(`http://${minioContainer.getHost()}:${minioContainer.getPort()}/test-invoices/`, "");
+    const getResult = await minioClient.send(new GetObjectCommand({ Bucket: "test-invoices", Key: key }));
+    const body = await getResult.Body!.transformToByteArray();
+    expect(Buffer.from(body).subarray(0, 5).toString("utf-8")).toBe("%PDF-");
+
+    await worker.close();
+    await invoiceTestRedis.quit();
+  }, 60_000);
 });

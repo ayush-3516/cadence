@@ -6,6 +6,7 @@ const ANVIL_DEFAULT_DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cb
 
 export interface DeployedContracts {
   subscriptionManager: `0x${string}`;
+  feeRegistry: `0x${string}`;
   usdc: `0x${string}`;
   treasury: `0x${string}`;
 }
@@ -59,6 +60,7 @@ export function deployContracts(rpcUrl: string): DeployedContracts {
 
   return {
     subscriptionManager: proxyDeployments[1].contractAddress as `0x${string}`,
+    feeRegistry: proxyDeployments[0].contractAddress as `0x${string}`,
     usdc: addressOf("MockUSDC"),
     treasury: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // anvil default account #0 — DeployLocal.s.sol's deployer, matching Deploy.s.sol's own deployer-as-treasury-placeholder convention for Phase 0
   };
