@@ -13,6 +13,7 @@ import { SubscriptionsModule } from "./subscriptions/subscriptions.module.js";
 import { CustomersModule } from "./customers/customers.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
 import { InvoicesModule } from "./invoices/invoices.module.js";
+import { AnalyticsModule } from "./analytics/analytics.module.js";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { InvoicesModule } from "./invoices/invoices.module.js";
     CustomersModule,
     WebhooksModule,
     InvoicesModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

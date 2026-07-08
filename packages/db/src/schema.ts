@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb, numeric, smallint, integer } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, boolean, timestamp, unique, index, jsonb, numeric, smallint, integer, date, primaryKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const apiKeyType = pgEnum("api_key_type", ["publishable", "secret"]);
@@ -149,4 +149,23 @@ export const invoice = pgTable(
     index("invoice_merchant_id_created_at_idx").on(table.merchantId, table.createdAt),
     index("invoice_onchain_sub_id_idx").on(table.onchainSubId),
   ],
+);
+
+export const analyticsDaily = pgTable(
+  "analytics_daily",
+  {
+    merchantId: uuid("merchant_id").notNull().references(() => merchant.id),
+    date: date("date").notNull(),
+    mrrUsd: numeric("mrr_usd", { precision: 20, scale: 6 }).notNull(),
+    arrUsd: numeric("arr_usd", { precision: 20, scale: 6 }).notNull(),
+    activeSubs: integer("active_subs").notNull(),
+    trialingSubs: integer("trialing_subs").notNull(),
+    pastDueSubs: integer("past_due_subs").notNull(),
+    newSubs: integer("new_subs").notNull(),
+    canceledSubs: integer("canceled_subs").notNull(),
+    grossVolumeUsd: numeric("gross_volume_usd", { precision: 20, scale: 6 }).notNull(),
+    feeRevenueUsd: numeric("fee_revenue_usd", { precision: 20, scale: 6 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.merchantId, table.date] })],
 );
