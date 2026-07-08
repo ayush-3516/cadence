@@ -6,7 +6,7 @@ import { Wallet } from "ethers";
 import { SiweMessage } from "siwe";
 import fastifyCookie from "@fastify/cookie";
 import { eq } from "drizzle-orm";
-import { createDbClient, schema, type DbClient } from "@cadence/db";
+import { createDbClient, schema, onchainSchema, type DbClient } from "@cadence/db";
 import { AppModule } from "../src/app.module.js";
 import { startTestDatabase, stopTestDatabase } from "./setup.js";
 
@@ -125,5 +125,71 @@ describe("Analytics", () => {
 
     const mrrResponse = await request(server).get("/v1/analytics/mrr").set("Authorization", `Bearer ${pubKey}`);
     expect(mrrResponse.status).toBe(403);
+  });
+
+  it("computes churn rate and revenue churn over a window", async () => {
+    const { cookie, ownerAddress } = await signInAndCreateMerchant(server);
+    await seedRollupRow(ownerAddress, "2026-05-01", { activeSubs: 100, mrrUsd: "5000.000000", canceledSubs: 0 });
+    await seedRollupRow(ownerAddress, "2026-05-15", { activeSubs: 97, mrrUsd: "4900.000000", canceledSubs: 3 });
+    await seedRollupRow(ownerAddress, "2026-05-31", { activeSubs: 95, mrrUsd: "4900.000000", canceledSubs: 2 });
+
+    const response = await request(server)
+      .get("/v1/analytics/churn")
+      .query({ from: "2026-05-01", to: "2026-05-31" })
+      .set("Cookie", cookie);
+    expect(response.status).toBe(200);
+    expect(response.body.churn_rate).toBeCloseTo(5 / 100, 6); // 3+2 canceled across the window / 100 starting actives
+    expect(response.body.revenue_churn).toBeCloseTo(100 / 5000, 6); // (5000-4900)/5000
+  });
+
+  it("returns zero churn for a merchant with no rollup history", async () => {
+    const { cookie } = await signInAndCreateMerchant(server);
+    const response = await request(server).get("/v1/analytics/churn").set("Cookie", cookie);
+    expect(response.status).toBe(200);
+    expect(response.body.churn_rate).toBe(0);
+    expect(response.body.revenue_churn).toBe(0);
+  });
+
+  it("computes a cohort retention matrix from onchain_subscription", async () => {
+    const { cookie, ownerAddress } = await signInAndCreateMerchant(server);
+    const [merchantRow] = await db.select().from(schema.merchant).where(eq(schema.merchant.ownerAddress, ownerAddress));
+    await db.insert(onchainSchema.onchainPlan).values({
+      onchainPlanId: `${Date.now()}`,
+      merchantAddress: ownerAddress,
+      payoutSplit: ownerAddress,
+      token: "0xusdc",
+      amount: "10000000",
+      periodSeconds: 2_592_000n,
+      trialSeconds: 0n,
+      active: true,
+      chainId: 84532,
+    });
+    const [plan] = await db.select().from(onchainSchema.onchainPlan).where(eq(onchainSchema.onchainPlan.merchantAddress, ownerAddress));
+    await db.insert(onchainSchema.onchainSubscription).values([
+      { onchainSubId: `${Date.now()}1`, onchainPlanId: plan.onchainPlanId, subscriberAddress: "0x111", status: "active", currentPeriodEnd: new Date(), pausedRemaining: 0n, pendingCancel: false, chainId: 84532, createdAt: new Date("2026-01-15T00:00:00Z") },
+      { onchainSubId: `${Date.now()}2`, onchainPlanId: plan.onchainPlanId, subscriberAddress: "0x222", status: "canceled", currentPeriodEnd: new Date(), pausedRemaining: 0n, pendingCancel: false, chainId: 84532, createdAt: new Date("2026-01-20T00:00:00Z"), canceledAt: new Date("2026-02-10T00:00:00Z") },
+    ]);
+
+    const response = await request(server).get("/v1/analytics/cohorts").set("Cookie", cookie);
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.data)).toBe(true);
+    const januaryCohort = response.body.data.find((c: { cohort: string }) => c.cohort === "2026-01");
+    expect(januaryCohort).toBeDefined();
+    expect(januaryCohort.cohort_size).toBe(2);
+    // Retention here checks CURRENT status against whether the offset-month has occurred yet (documented
+    // simplification — no status-history table). Of the two January subs, only the "active" one currently
+    // counts as retained; the "canceled" one never counts as retained at any offset under this check.
+    expect(januaryCohort.offsets[0].retention_pct).toBeCloseTo(0.5, 6);
+  });
+
+  it("rejects a publishable key on churn and cohorts", async () => {
+    const { cookie } = await signInAndCreateMerchant(server);
+    const pubKey = await createPublishableKey(server, cookie);
+
+    const churnResponse = await request(server).get("/v1/analytics/churn").set("Authorization", `Bearer ${pubKey}`);
+    expect(churnResponse.status).toBe(403);
+
+    const cohortsResponse = await request(server).get("/v1/analytics/cohorts").set("Authorization", `Bearer ${pubKey}`);
+    expect(cohortsResponse.status).toBe(403);
   });
 });

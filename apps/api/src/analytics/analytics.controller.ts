@@ -42,6 +42,7 @@ export class AnalyticsController {
     const merchantId = await this.resolveMerchantId(request);
     const latest = await this.analyticsService.getLatestRow(merchantId);
     const window = await this.analyticsService.getWindowSum(merchantId, daysAgo(30), today());
+    const churn = await this.analyticsService.getChurn(merchantId, daysAgo(30), today());
     const activeSubs = latest.activeSubs;
     const arpuUsd = activeSubs > 0 ? Number(latest.mrrUsd) / activeSubs : 0;
 
@@ -52,7 +53,7 @@ export class AnalyticsController {
       arpu_usd: arpuUsd.toFixed(6),
       gross_volume_30d_usd: window.grossVolumeUsd.toFixed(6),
       fee_revenue_30d_usd: window.feeRevenueUsd.toFixed(6),
-      churn_rate_30d: 0, // computed properly once Task 5's churn logic is wired in below
+      churn_rate_30d: churn.churnRate,
     };
   }
 
@@ -65,5 +66,26 @@ export class AnalyticsController {
     return {
       data: rows.map((r) => ({ date: r.date, mrr_usd: r.mrrUsd, arr_usd: r.arrUsd })),
     };
+  }
+
+  @Get("churn")
+  async churn(@Query() query: { from?: string; to?: string }, @Req() request: FastifyRequest) {
+    const merchantId = await this.resolveMerchantId(request);
+    const from = query.from ?? daysAgo(30);
+    const to = query.to ?? today();
+    const result = await this.analyticsService.getChurn(merchantId, from, to);
+    return { churn_rate: result.churnRate, revenue_churn: result.revenueChurn };
+  }
+
+  @Get("cohorts")
+  async cohorts(@Req() request: FastifyRequest) {
+    const auth = await this.authContext.resolve(request);
+    const merchantId = await this.resolveMerchantId(request);
+    const merchant =
+      auth.keyType === "session"
+        ? await this.merchantsService.findByOwnerAddress(auth.ownerAddress, false)
+        : await this.merchantsService.findByOwnerAddressById(auth.merchantId!);
+    const data = await this.analyticsService.getCohorts(merchantId, merchant!.ownerAddress);
+    return { data };
   }
 }
