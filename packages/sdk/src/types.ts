@@ -116,7 +116,7 @@ export interface WebhookDelivery {
   endpointId: string;
   eventId: string;
   eventType: string;
-  status: "pending" | "succeeded" | "failed";
+  status: "pending" | "succeeded" | "failed" | "dead";
   attempts: number;
   nextAttemptAt: string | null;
   responseCode: number | null;
