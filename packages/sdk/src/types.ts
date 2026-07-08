@@ -72,3 +72,30 @@ export interface Invoice {
   onchain_plan_id: string;
   issued_at: string;
 }
+
+export interface AnalyticsSummary {
+  mrr_usd: string;
+  arr_usd: string;
+  active_subscriptions: number;
+  arpu_usd: string;
+  gross_volume_30d_usd: string;
+  fee_revenue_30d_usd: string;
+  churn_rate_30d: number;
+}
+
+export interface MrrPoint {
+  date: string;
+  mrr_usd: string;
+  arr_usd: string;
+}
+
+export interface CohortOffset {
+  month: number;
+  retention_pct: number;
+}
+
+export interface CohortRow {
+  cohort: string;
+  cohort_size: number;
+  offsets: CohortOffset[];
+}
