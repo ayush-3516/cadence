@@ -27,6 +27,18 @@ beyond §10's SDK-specific mandate into new backend work.
 Session-cookie auth (SIWE sign-in, used by the not-yet-built dashboard) is
 a browser/dashboard-app concern, not this general-purpose SDK's.
 
+**Resolved (api-keys):** `POST /v1/api-keys`, `GET /v1/api-keys`, and
+`DELETE /v1/api-keys/:id` are entirely gated by `@UseGuards(SessionGuard)`
+in `apps/api/src/api-keys/api-keys.controller.ts` — there is no API-key-
+authenticated path to any of them. Given the API-key-only auth decision
+above, `cadence.apiKeys.*` has no callable backend route in this phase and
+is dropped from the SDK's surface entirely, the same treatment as
+payouts/events/prepare. A future phase can add it back if/when the SDK
+also supports session-cookie auth. `POST /v1/merchants` (merchant
+creation) is similarly session-only and is also excluded; `GET
+/v1/merchants/me` is NOT session-gated (it uses `AuthContextService.
+resolve`, which accepts any key type) and remains in scope.
+
 **Resolved (init):** the PRD's example `new Cadence({ apiKey, chain })`
 included a `chain` param for the on-chain helpers this phase excludes —
 dropped. Constructor is `{ apiKey, baseUrl? }`, with `baseUrl` defaulting
@@ -88,8 +100,6 @@ packages/sdk/src/
 ## Resource surface (mapped 1:1 to real controllers)
 
 - `cadence.merchants.me()` → `GET /v1/merchants/me`
-- `cadence.apiKeys.create({type})` / `.list()` / `.revoke(id)` →
-  `POST/GET /v1/api-keys`, `DELETE /v1/api-keys/:id`
 - `cadence.plans.list(filter)` / `.get(onchainId)` /
   `.attachMetadata(onchainId, {name, description})` →
   `GET /v1/plans`, `GET /v1/plans/:onchainId`,
@@ -183,6 +193,9 @@ the PRD's own "thin, typed, wrapping REST" framing for the SDK.
   prepareCancel, etc.) — no `/v1/prepare/*` backend endpoints exist yet.
 - `cadence.payouts` — no `/v1/payouts` backend endpoint exists yet.
 - `cadence.events` — no `/v1/events` backend endpoint exists yet.
+- `cadence.apiKeys.*` — `/v1/api-keys*` is entirely session-cookie-gated,
+  no API-key-authenticated path exists.
+- `cadence.merchants.create()` — `POST /v1/merchants` is session-only.
 - Session-cookie/SIWE auth support in the SDK.
 - Auto-pagination (async iterators).
 - `@cadence/react` (hooks, `<SubscribeButton />`) — explicitly a later
