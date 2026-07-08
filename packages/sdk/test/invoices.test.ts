@@ -22,12 +22,12 @@ describe("InvoicesResource", () => {
   });
 
   it("get() calls GET /v1/invoices/:id", async () => {
-    const request = vi.fn().mockResolvedValue({ id: "inv_1", number: 1 }) as unknown as RequestFn;
+    const request = vi.fn().mockResolvedValue({ id: "inv_1", number: "1" }) as unknown as RequestFn;
     const invoices = new InvoicesResource(request);
 
     const result = await invoices.get("inv_1");
 
     expect(request).toHaveBeenCalledWith("GET", "/v1/invoices/inv_1");
-    expect(result).toEqual({ id: "inv_1", number: 1 });
+    expect(result).toEqual({ id: "inv_1", number: "1" });
   });
 });

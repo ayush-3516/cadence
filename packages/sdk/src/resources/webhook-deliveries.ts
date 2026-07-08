@@ -18,7 +18,7 @@ export class WebhookDeliveriesResource {
     return this.request("GET", "/v1/webhook-deliveries", { query }) as Promise<PageEnvelope<WebhookDelivery>>;
   }
 
-  async replay(id: string): Promise<WebhookDelivery> {
-    return this.request("POST", `/v1/webhook-deliveries/${id}/replay`) as Promise<WebhookDelivery>;
+  async replay(id: string): Promise<{ replayed: boolean }> {
+    return this.request("POST", `/v1/webhook-deliveries/${id}/replay`) as Promise<{ replayed: boolean }>;
   }
 }

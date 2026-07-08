@@ -62,7 +62,7 @@ export interface Customer {
 
 export interface Invoice {
   id: string;
-  number: number;
+  number: string;
   pdf_url: string | null;
   tx_hash: string;
   amount: string;
