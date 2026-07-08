@@ -500,7 +500,7 @@ describe("runAnalyticsRollup", () => {
       usdValue: "20.000000",
       txHash: "0xtxhash",
       chainId: 84532,
-      chargedAt: new Date("2026-07-09T18:00:00Z"), // within the trailing 24h window ending at rollupDate
+      chargedAt: new Date("2026-07-10T18:00:00Z"), // within [rollupDate, rollupDate + 1 day), the calendar-day window runAnalyticsRollup actually queries
     });
 
     await runAnalyticsRollup(db, rollupDate);
@@ -524,7 +524,7 @@ describe("runAnalyticsRollup", () => {
 
   it("upserts (does not duplicate) when run twice for the same merchant and date", async () => {
     const merchantAddress = `0x${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`.padEnd(42, "0").slice(0, 42);
-    await seedMerchant(merchantAddress);
+    const merchant = await seedMerchant(merchantAddress);
     await db.insert(onchainSchema.onchainPlan).values({
       onchainPlanId: "1002",
       merchantAddress,
@@ -541,7 +541,14 @@ describe("runAnalyticsRollup", () => {
     await runAnalyticsRollup(db, rollupDate);
     await runAnalyticsRollup(db, rollupDate);
 
-    const rows = await db.select().from(schema.analyticsDaily).where(eq(schema.analyticsDaily.date, "2026-07-11"));
+    // Scoped to this test's own merchant: runAnalyticsRollup loops over every merchant with an
+    // on-chain plan (by design, a single daily job for all merchants), so other tests' merchants
+    // may also land rows on this same date — an unscoped date-only query would over-count those
+    // as if they were duplicates of this merchant's own row.
+    const rows = await db
+      .select()
+      .from(schema.analyticsDaily)
+      .where(and(eq(schema.analyticsDaily.merchantId, merchant.id), eq(schema.analyticsDaily.date, "2026-07-11")));
     expect(rows).toHaveLength(1);
   });
 
