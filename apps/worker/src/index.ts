@@ -1,8 +1,9 @@
 import Redis from "ioredis";
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import { createDbClient } from "@cadence/db";
 import { loadConfig } from "./config.js";
 import { createQueues, CHARGE_SCHEDULER_QUEUE_NAME } from "./queues.js";
+import { runAnalyticsRollup } from "./analytics-rollup.js";
 
 async function main() {
   const config = loadConfig();
@@ -28,6 +29,20 @@ async function main() {
   const chargeWorker = startChargeWorker();
   const webhookWorker = startWebhookWorker();
 
+  const analyticsRollupQueue = new Queue("analytics-rollup", { connection: redis });
+  await analyticsRollupQueue.upsertJobScheduler(
+    "analytics-rollup-repeat",
+    { every: 24 * 60 * 60 * 1000 }, // once per day
+    { name: "run-analytics-rollup", data: {} },
+  );
+  const analyticsRollupWorker = new Worker(
+    "analytics-rollup",
+    async () => {
+      await runAnalyticsRollup(db, new Date());
+    },
+    { connection: redis },
+  );
+
   console.log(`Worker started. Scheduler interval: ${config.schedulerIntervalMs}ms.`);
 
   async function shutdown() {
@@ -35,6 +50,7 @@ async function main() {
     await schedulerQueueWorker.close();
     await chargeWorker.close();
     await webhookWorker.close();
+    await analyticsRollupWorker.close();
     await redis.quit();
     process.exit(0);
   }
