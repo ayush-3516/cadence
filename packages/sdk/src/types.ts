@@ -52,3 +52,23 @@ export interface SubscriptionDetail extends Subscription {
   plan: PlanSummary;
   charges: ChargeSummary[];
 }
+
+export interface Customer {
+  id: string;
+  address: string;
+  email: string | null;
+  subscription_count: number;
+}
+
+export interface Invoice {
+  id: string;
+  number: number;
+  pdf_url: string | null;
+  tx_hash: string;
+  amount: string;
+  platform_fee: string;
+  net: string;
+  onchain_sub_id: string;
+  onchain_plan_id: string;
+  issued_at: string;
+}
