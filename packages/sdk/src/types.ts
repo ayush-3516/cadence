@@ -99,3 +99,38 @@ export interface CohortRow {
   cohort_size: number;
   offsets: CohortOffset[];
 }
+
+export interface WebhookEndpoint {
+  id: string;
+  merchantId: string;
+  url: string;
+  enabledEvents: string[];
+  status: "enabled" | "disabled";
+  livemode: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  endpointId: string;
+  eventId: string;
+  eventType: string;
+  status: "pending" | "succeeded" | "failed";
+  attempts: number;
+  nextAttemptAt: string | null;
+  responseCode: number | null;
+  responseBody: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Merchant {
+  id: string;
+  name: string;
+  ownerAddress: string;
+  livemode: boolean;
+  createdAt: string;
+  updatedAt: string;
+  invoiceSequence: number;
+}
