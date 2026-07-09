@@ -73,15 +73,21 @@ dashboard phase already covers it.
   status (`StatusBadge`, reused from `packages/ui`), cadence pulse to next charge
   (`CadencePulse`, reused as-is), and a balance warning if the connected wallet's USDC
   balance is below the next charge amount. Uses `cadence.customers.subscriptions(address)`.
-- **`/portal/subscriptions/[id]`** — detail. Status, next charge, invoice list for this
-  subscription, and three real wallet-write actions: **Cancel** (immediate or at period
-  end — a toggle/choice in the UI, passed as `cancel`'s `immediate` boolean param),
-  **Pause**, **Resume** (only one of pause/resume shown, depending on current status). Uses
-  `cadence.subscriptions.get(onchainId)` for detail (session cookie not required — this
-  route reads via the SDK the same as `/portal`, scoped by the connected wallet's own
-  address for authorization at the UI layer, since the backend endpoint itself doesn't
-  enforce "this caller owns this specific subscription" beyond merchant-scoping — matching
-  the same trust model the dashboard's own subscription detail page already uses).
+- **`/portal/subscriptions/[id]`** — detail. **Resolved (data source):** `GET
+  /v1/subscriptions/:onchainId` (the full detail endpoint, with `plan`/`charges`) requires a
+  secret or session key — confirmed in `apps/api/src/subscriptions/subscriptions.controller.ts`,
+  it rejects publishable keys outright. The portal has only a publishable key. The only
+  endpoint actually available is `GET /v1/customers/:address/subscriptions` (via
+  `cadence.customers.subscriptions(address)`), which returns the summary shape only — no
+  plan name, no `period_seconds`, no charge history. This page therefore shows status,
+  `onchain_sub_id`, subscriber address, and the three wallet-write actions
+  (cancel/pause/resume — each needs only the `onchain_sub_id`, already available from the
+  summary), found by filtering the same list the `/portal` page already fetches down to the
+  one matching `onchain_sub_id`. No charge-history table, no full plan name/period display —
+  this is a real, permanent API constraint (publishable keys are deliberately more
+  restricted than secret keys throughout this codebase), not a temporary gap to work around.
+  Cancel offers **immediate or at period end** (passed as `cancel`'s `immediate` boolean
+  param); only one of Pause/Resume is shown, depending on current status.
 - **`/portal/invoices`** — all invoices for the connected wallet across this merchant, with
   a **Download** link to each invoice's `pdf_url`. Uses `cadence.invoices.list({subscriber:
   address})`.
