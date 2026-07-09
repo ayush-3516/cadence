@@ -120,6 +120,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@cadence/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.60.0
         version: 5.101.2(react@18.3.1)

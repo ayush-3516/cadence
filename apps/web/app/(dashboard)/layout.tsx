@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SignInButton } from "../../components/SignInButton.js";
 import { CreateMerchantPrompt } from "../../components/CreateMerchantPrompt.js";
+import { DashboardNav } from "../../components/DashboardNav.js";
 import { apiFetch, ApiError } from "../../lib/apiFetch.js";
 
 type AuthState = "checking" | "signed-out" | "no-merchant" | "ready";
@@ -44,5 +45,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <CreateMerchantPrompt onCreated={() => checkMerchant()} />;
   }
 
-  return <div className="flex min-h-screen">{children}</div>;
+  return (
+    <div className="flex min-h-screen">
+      <DashboardNav />
+      <div className="flex-1 p-8">{children}</div>
+    </div>
+  );
 }
