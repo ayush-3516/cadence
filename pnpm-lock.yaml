@@ -120,6 +120,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@cadence/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@cadence/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@cadence/ui':
         specifier: workspace:*
         version: link:../../packages/ui
