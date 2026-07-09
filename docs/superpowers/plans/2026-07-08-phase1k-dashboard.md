@@ -1618,6 +1618,10 @@ export default function SubscriptionsPage() {
               </td>
               <td className="py-2"><StatusBadge status={sub.status} /></td>
               <td className="py-2 w-40">
+                {/* GET /v1/subscriptions has no per-plan period_seconds (only the detail
+                    endpoint does), so this hardcodes a 30-day period rather than fetching
+                    each row's plan separately (would be N+1). The detail page uses the
+                    real plan.period_seconds value. */}
                 <CadencePulse periodSeconds={30 * 86400} currentPeriodEnd={sub.current_period_end} />
               </td>
             </tr>
