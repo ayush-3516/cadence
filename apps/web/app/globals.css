@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0B1020;
+  --color-paper: #FBFAF7;
+  --color-sapphire: #2F5BFF;
+  --color-signal: #F4A62A;
+  --color-mint: #17B890;
+  --color-slate: #5B6478;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Geist Sans", system-ui, sans-serif;
+  --font-data: "Geist Mono", "JetBrains Mono", monospace;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}

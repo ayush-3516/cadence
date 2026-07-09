@@ -11,3 +11,6 @@ deployments/*
 !deployments/.gitkeep
 .DS_Store
 *.log
+.next/
+next-env.d.ts
+*.tsbuildinfo
