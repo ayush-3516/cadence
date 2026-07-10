@@ -8,8 +8,10 @@ import fastifyCookie from "@fastify/cookie";
 import { decodeFunctionData } from "viem";
 import { subscriptionManagerAbi } from "@cadence/shared";
 import { createDbClient, type DbClient } from "@cadence/db";
+import type { INestApplication } from "@nestjs/common";
 import { AppModule } from "../src/app.module.js";
-import { startTestDatabase, stopTestDatabase } from "./setup.js";
+import { PREPARE_RPC_CLIENT } from "../src/prepare/rpc-client.module.js";
+import { startTestDatabase, stopTestDatabase, seedOnchainPlan } from "./setup.js";
 
 type Server = ReturnType<ReturnType<NestFastifyApplication["getHttpAdapter"]>["getInstance"]>["server"];
 
@@ -60,7 +62,19 @@ describe("Prepare", () => {
     process.env.RPC_URL_HTTP = "http://127.0.0.1:1"; // unused by /v1/prepare/plan; /subscribe's coverage in Task 5 overrides the client via DI instead of relying on this being reachable
     db = createDbClient(connectionUri);
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const fakePublicClient = {
+      readContract: async ({ functionName, args }: { functionName: string; args?: readonly unknown[] }) => {
+        if (functionName === "name") return "Test USD Coin";
+        if (functionName === "version") return "2";
+        if (functionName === "nonces") return 7n;
+        throw new Error(`Unexpected readContract call: ${functionName}`);
+      },
+    };
+
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PREPARE_RPC_CLIENT)
+      .useValue(fakePublicClient)
+      .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     await app.register(fastifyCookie, { secret: "test-secret" });
     await app.init();
@@ -133,5 +147,64 @@ describe("Prepare", () => {
 
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(response.status).toBeLessThan(500);
+  });
+
+  it("returns permit typed-data and a subscribe template for a plan the caller's key owns", async () => {
+    const { cookie, ownerAddress } = await signInAndCreateMerchant(server);
+    const plan = await seedOnchainPlan(db, { merchantAddress: ownerAddress, amount: "5000000", token: "0x123400000000000000000000000000000000000e" });
+    const pubKey = await createPublishableKey(server, cookie);
+    const subscriberOwner = "0x999900000000000000000000000000000000000f";
+
+    const response = await request(server)
+      .get("/v1/prepare/subscribe")
+      .set("Authorization", `Bearer ${pubKey}`)
+      .query({ planId: plan.onchainPlanId, owner: subscriberOwner });
+
+    expect(response.status).toBe(200);
+    expect(response.body.permit.domain).toEqual({
+      name: "Test USD Coin",
+      version: "2",
+      chainId: 84532,
+      verifyingContract: "0x123400000000000000000000000000000000000e",
+    });
+    expect(response.body.permit.message).toEqual({
+      owner: subscriberOwner,
+      spender: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      value: "5000000",
+      nonce: "7",
+      deadline: response.body.permit.message.deadline,
+    });
+    expect(response.body.subscribe).toEqual({
+      to: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      fn: "subscribeWithPermit",
+      planId: plan.onchainPlanId,
+      deadline: response.body.permit.message.deadline,
+    });
+  });
+
+  it("returns 404 for a plan the caller's key does not own", async () => {
+    const { cookie } = await signInAndCreateMerchant(server);
+    const otherPlan = await seedOnchainPlan(db, { merchantAddress: "0x111100000000000000000000000000000000000a" });
+    const pubKey = await createPublishableKey(server, cookie);
+
+    const response = await request(server)
+      .get("/v1/prepare/subscribe")
+      .set("Authorization", `Bearer ${pubKey}`)
+      .query({ planId: otherPlan.onchainPlanId, owner: "0x999900000000000000000000000000000000000f" });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("accepts a secret key on GET /v1/prepare/subscribe too", async () => {
+    const { cookie, ownerAddress } = await signInAndCreateMerchant(server);
+    const plan = await seedOnchainPlan(db, { merchantAddress: ownerAddress });
+    const secretKey = await createSecretKey(server, cookie);
+
+    const response = await request(server)
+      .get("/v1/prepare/subscribe")
+      .set("Authorization", `Bearer ${secretKey}`)
+      .query({ planId: plan.onchainPlanId, owner: "0x999900000000000000000000000000000000000f" });
+
+    expect(response.status).toBe(200);
   });
 });

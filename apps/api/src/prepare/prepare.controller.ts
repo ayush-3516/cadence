@@ -3,15 +3,17 @@ import { FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { AuthContextService } from "../auth/auth-context.service.js";
 import { RequireKeyType } from "../auth/require-key-type.decorator.js";
+import { MerchantsService } from "../merchants/merchants.service.js";
 import { AppException } from "../common/errors.js";
 import { PrepareService } from "./prepare.service.js";
-import { PreparePlanQuerySchema } from "./prepare.dto.js";
+import { PreparePlanQuerySchema, PrepareSubscribeQuerySchema } from "./prepare.dto.js";
 
 @Controller("v1/prepare")
 export class PrepareController {
   constructor(
     private readonly prepareService: PrepareService,
     private readonly authContext: AuthContextService,
+    private readonly merchantsService: MerchantsService,
   ) {}
 
   // @RequireKeyType sets route metadata only; AuthContextService.resolve only
@@ -36,6 +38,27 @@ export class PrepareController {
 
     const params = parsePreparePlanQuery(query);
     return this.prepareService.buildCreatePlanCalldata(params);
+  }
+
+  @Get("subscribe")
+  async subscribe(@Query() query: Record<string, string>, @Req() request: FastifyRequest) {
+    const params = PrepareSubscribeQuerySchema.parse(query);
+
+    const auth = await this.authContext.resolve(request);
+    const callerOwnerAddress =
+      auth.keyType === "session"
+        ? auth.ownerAddress
+        : (await this.resolveMerchantOwnerAddress(auth)).ownerAddress;
+
+    return this.prepareService.buildSubscribePermit(callerOwnerAddress, params);
+  }
+
+  private async resolveMerchantOwnerAddress(auth: { merchantId: string | null }): Promise<{ ownerAddress: string }> {
+    const merchant = await this.merchantsService.findByOwnerAddressById(auth.merchantId!);
+    if (!merchant) {
+      throw new AppException({ type: "invalid_request_error", code: "merchant_not_found", message: "No merchant account found for this API key." });
+    }
+    return { ownerAddress: merchant.ownerAddress };
   }
 }
 
