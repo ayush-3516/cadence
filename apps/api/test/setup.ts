@@ -81,6 +81,29 @@ export async function seedOnchainSubscription(
   return row;
 }
 
+let payoutCounter = 0;
+
+export async function seedOnchainPayout(
+  db: DbClient,
+  overrides: Partial<typeof onchainSchema.onchainPayout.$inferInsert> = {},
+): Promise<typeof onchainSchema.onchainPayout.$inferSelect> {
+  payoutCounter += 1;
+  const [row] = await db
+    .insert(onchainSchema.onchainPayout)
+    .values({
+      id: `0xpayout${payoutCounter}:0`,
+      splitAddress: "0xdef0000000000000000000000000000000000b",
+      recipient: "0x2220000000000000000000000000000000000e",
+      token: "0x0000000000000000000000000000000000000c",
+      amount: "5000000",
+      chainId: 84532,
+      distributedAt: new Date(),
+      ...overrides,
+    })
+    .returning();
+  return row;
+}
+
 export async function seedOnchainCharge(
   db: DbClient,
   overrides: Partial<typeof onchainSchema.onchainCharge.$inferInsert> = {},
