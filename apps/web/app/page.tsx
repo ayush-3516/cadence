@@ -1,8 +1,17 @@
+import { Hero } from "../components/marketing/Hero.js";
+import { Wedge } from "../components/marketing/Wedge.js";
+import { HowItWorks } from "../components/marketing/HowItWorks.js";
+import { Pricing } from "../components/marketing/Pricing.js";
+import { ClosingCta } from "../components/marketing/ClosingCta.js";
+
 export default function RootPage() {
   return (
-    <main className="p-8">
-      <h1 className="font-display text-2xl">Cadence</h1>
-      <p className="font-body text-slate">Merchant dashboard — under construction.</p>
+    <main className="marketing-page min-h-screen">
+      <Hero />
+      <Wedge />
+      <HowItWorks />
+      <Pricing />
+      <ClosingCta />
     </main>
   );
 }
