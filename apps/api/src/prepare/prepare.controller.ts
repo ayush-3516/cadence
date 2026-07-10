@@ -19,9 +19,16 @@ export class PrepareController {
   // rejection on /plan was removed because the dashboard (a legitimate,
   // primary caller of this endpoint as of Phase 1o) authenticates via session
   // cookie only and can never hold a secret key. This mirrors /subscribe's
-  // existing, already-broader acceptance below.
+  // existing, already-broader acceptance below. `resolve()` is still called
+  // (its result is unused) purely to reject fully unauthenticated requests —
+  // without it, a caller with no cookie and no API key at all would pass
+  // straight through, since this route no longer restricts by keyType and
+  // this codebase has no global auth guard (app.module.ts registers only
+  // APP_PIPE/APP_FILTER; SessionGuard/ApiKeyGuard are opt-in per controller,
+  // not applied here).
   @Get("plan")
-  async plan(@Query() query: Record<string, string>) {
+  async plan(@Query() query: Record<string, string>, @Req() request: FastifyRequest) {
+    await this.authContext.resolve(request);
     const params = parsePreparePlanQuery(query);
     return this.prepareService.buildCreatePlanCalldata(params);
   }

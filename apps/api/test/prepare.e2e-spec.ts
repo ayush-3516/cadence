@@ -129,6 +129,21 @@ describe("Prepare", () => {
     expect(response.body.to).toBe("0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9");
   });
 
+  it("rejects a request with no session cookie and no API key on GET /v1/prepare/plan", async () => {
+    const response = await request(server)
+      .get("/v1/prepare/plan")
+      .query({
+        payoutSplit: "0xdef000000000000000000000000000000000000b",
+        token: "0x000000000000000000000000000000000000000c",
+        amount: "20000000",
+        period: "2592000",
+        trial: "0",
+      });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("missing_credentials");
+  });
+
   it("returns a 400-range error for a malformed address", async () => {
     const { cookie } = await signInAndCreateMerchant(server);
     const secretKey = await createSecretKey(server, cookie);
