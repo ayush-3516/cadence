@@ -52,3 +52,16 @@ export const onchainCharge = pgTable("onchain_charge", {
   chainId: integer("chain_id"),
   chargedAt: timestamp("charged_at", { withTimezone: true }).notNull(),
 });
+
+export const onchainPayout = pgTable("onchain_payout", {
+  id: text("id").primaryKey(),
+  splitAddress: text("split_address").notNull(),
+  recipient: text("recipient").notNull(),
+  token: text("token").notNull(),
+  amount: numeric("amount", { precision: 78, scale: 0 }).notNull(),
+  usdValue: numeric("usd_value", { precision: 20, scale: 6 }),
+  txHash: text("tx_hash"),
+  blockNumber: bigint("block_number", { mode: "bigint" }),
+  chainId: integer("chain_id"),
+  distributedAt: timestamp("distributed_at", { withTimezone: true }).notNull(),
+});

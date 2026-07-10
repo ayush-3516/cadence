@@ -66,3 +66,15 @@ export const onchainPayout = onchainTable("onchain_payout", (t) => ({
   chainId: t.integer("chain_id"),
   distributedAt: t.timestamp("distributed_at", { withTimezone: true }).notNull(),
 }));
+
+// Indexer-internal only — bridges Split addresses discovered via
+// PullSplitFactoryV2.2's SplitCreated event (Task 3/4) to the
+// SplitsWarehouse Transfer handler (Task 4), which needs to check whether
+// a Transfer's `sender` is a known Split before recording it as a payout.
+// Never mirrored into packages/db/src/onchain-schema.ts — apps/api never
+// queries this table directly, only onchain_payout.
+export const onchainSplit = onchainTable("onchain_split", (t) => ({
+  address: t.text("address").primaryKey(),
+  chainId: t.integer("chain_id").notNull(),
+  createdAt: t.timestamp("created_at", { withTimezone: true }),
+}));
