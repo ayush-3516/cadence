@@ -7,3 +7,4 @@
 // only the ABIs should import from this subpath (@cadence/shared/abis) instead.
 export { subscriptionManagerAbi } from "../abis/SubscriptionManager.js";
 export { feeRegistryAbi } from "../abis/FeeRegistry.js";
+export { erc20PermitAbi } from "../abis/Erc20Permit.js";

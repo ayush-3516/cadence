@@ -2,6 +2,7 @@
   "name": "@cadence/api",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -28,7 +29,8 @@
     "drizzle-orm": "0.45.2",
     "fastify": "^5.8.5",
     "@cadence/db": "workspace:*",
-    "@cadence/shared": "workspace:*"
+    "@cadence/shared": "workspace:*",
+    "viem": "^2.21.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.23",
