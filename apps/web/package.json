@@ -20,7 +20,9 @@
     "@tanstack/react-query": "^5.60.0",
     "siwe": "^3.0.0",
     "recharts": "^3.0.0",
-    "@cadence/ui": "workspace:*"
+    "@cadence/ui": "workspace:*",
+    "@cadence/sdk": "workspace:*",
+    "@cadence/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
