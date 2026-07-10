@@ -111,13 +111,12 @@ describe("Prepare", () => {
     expect(decoded.args).toEqual(["0xdef000000000000000000000000000000000000b", "0x000000000000000000000000000000000000000C", 20000000n, 2592000, 0]);
   });
 
-  it("rejects a publishable key on GET /v1/prepare/plan", async () => {
+  it("accepts a session cookie on GET /v1/prepare/plan", async () => {
     const { cookie } = await signInAndCreateMerchant(server);
-    const pubKey = await createPublishableKey(server, cookie);
 
     const response = await request(server)
       .get("/v1/prepare/plan")
-      .set("Authorization", `Bearer ${pubKey}`)
+      .set("Cookie", cookie)
       .query({
         payoutSplit: "0xdef000000000000000000000000000000000000b",
         token: "0x000000000000000000000000000000000000000c",
@@ -126,8 +125,8 @@ describe("Prepare", () => {
         trial: "0",
       });
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.code).toBe("key_type_not_allowed");
+    expect(response.status).toBe(200);
+    expect(response.body.to).toBe("0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9");
   });
 
   it("returns a 400-range error for a malformed address", async () => {
