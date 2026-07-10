@@ -7,7 +7,6 @@ import { AnalyticsResource } from "./resources/analytics.js";
 import { WebhookEndpointsResource } from "./resources/webhook-endpoints.js";
 import { WebhookDeliveriesResource } from "./resources/webhook-deliveries.js";
 import { MerchantsResource } from "./resources/merchants.js";
-import { verifySignature } from "./webhooks.js";
 
 export interface CadenceConfig {
   apiKey: string;
@@ -27,7 +26,6 @@ export class Cadence {
   readonly webhookEndpoints: WebhookEndpointsResource;
   readonly webhookDeliveries: WebhookDeliveriesResource;
   readonly merchants: MerchantsResource;
-  readonly webhooks: { verifySignature: typeof verifySignature };
 
   constructor(config: CadenceConfig) {
     this._request = createRequest(config.apiKey, config.baseUrl ?? DEFAULT_BASE_URL);
@@ -39,6 +37,5 @@ export class Cadence {
     this.webhookEndpoints = new WebhookEndpointsResource(this._request);
     this.webhookDeliveries = new WebhookDeliveriesResource(this._request);
     this.merchants = new MerchantsResource(this._request);
-    this.webhooks = { verifySignature };
   }
 }

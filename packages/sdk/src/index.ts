@@ -1,6 +1,9 @@
+// `verifySignature` (node:crypto-based HMAC verification) is deliberately NOT re-exported
+// here — it's Node-only and would pull `node:crypto` into any browser bundle importing
+// anything from this barrel (confirmed: webpack fails to resolve it client-side). Import it
+// from the dedicated subpath instead: `import { verifySignature } from "@cadence/sdk/webhooks"`.
 export { Cadence, type CadenceConfig } from "./client.js";
 export { CadenceError, type CadenceErrorType } from "./errors.js";
-export { verifySignature } from "./webhooks.js";
 export type {
   PageEnvelope,
   Plan,
