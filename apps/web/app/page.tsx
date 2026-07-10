@@ -1,8 +1,9 @@
+import { Hero } from "../components/marketing/Hero.js";
+
 export default function RootPage() {
   return (
-    <main className="p-8">
-      <h1 className="font-display text-2xl">Cadence</h1>
-      <p className="font-body text-slate">Merchant dashboard — under construction.</p>
+    <main className="marketing-page min-h-screen">
+      <Hero />
     </main>
   );
 }

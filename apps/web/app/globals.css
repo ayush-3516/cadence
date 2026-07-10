@@ -19,3 +19,13 @@ body {
   color: var(--color-ink);
   font-family: var(--font-body);
 }
+
+/* Marketing page (/) commits to a dark ground for its entire single-page scope,
+   matching the portal's dark-default rather than the dashboard's light-default —
+   per the Phase 1m design spec's validated hero mockup. Scoped to a class the
+   root page applies to its own <main>, not a global override, since the
+   dashboard/portal keep their existing light/dark defaults untouched. */
+.marketing-page {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
