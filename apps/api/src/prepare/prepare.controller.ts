@@ -2,7 +2,6 @@ import { Controller, Get, Query, Req } from "@nestjs/common";
 import { FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { AuthContextService } from "../auth/auth-context.service.js";
-import { RequireKeyType } from "../auth/require-key-type.decorator.js";
 import { MerchantsService } from "../merchants/merchants.service.js";
 import { AppException } from "../common/errors.js";
 import { PrepareService } from "./prepare.service.js";
@@ -16,26 +15,20 @@ export class PrepareController {
     private readonly merchantsService: MerchantsService,
   ) {}
 
-  // @RequireKeyType sets route metadata only; AuthContextService.resolve only
-  // enforces it when called WITH an ExecutionContext, which no @Query()-only
-  // handler in this codebase has access to (ExecutionContext comes from a
-  // Guard, and none of the key-type routes use one). Every existing
-  // @RequireKeyType("secret") caller (see plans.controller.ts's
-  // resolveCallerOwnerAddress) re-checks auth.keyType by hand for this exact
-  // reason — this mirrors that established pattern, not a decorator-alone
-  // check like the plan text implied.
+  // Both routes accept session, secret, or publishable auth — publishable-key
+  // rejection on /plan was removed because the dashboard (a legitimate,
+  // primary caller of this endpoint as of Phase 1o) authenticates via session
+  // cookie only and can never hold a secret key. This mirrors /subscribe's
+  // existing, already-broader acceptance below. `resolve()` is still called
+  // (its result is unused) purely to reject fully unauthenticated requests —
+  // without it, a caller with no cookie and no API key at all would pass
+  // straight through, since this route no longer restricts by keyType and
+  // this codebase has no global auth guard (app.module.ts registers only
+  // APP_PIPE/APP_FILTER; SessionGuard/ApiKeyGuard are opt-in per controller,
+  // not applied here).
   @Get("plan")
-  @RequireKeyType("secret")
   async plan(@Query() query: Record<string, string>, @Req() request: FastifyRequest) {
-    const auth = await this.authContext.resolve(request);
-    if (auth.keyType !== "secret") {
-      throw new AppException({
-        type: "permission_error",
-        code: "key_type_not_allowed",
-        message: "This endpoint requires a secret API key.",
-      });
-    }
-
+    await this.authContext.resolve(request);
     const params = parsePreparePlanQuery(query);
     return this.prepareService.buildCreatePlanCalldata(params);
   }

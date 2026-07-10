@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePlans } from "../../../../lib/hooks/usePlans.js";
 import { StatusBadge } from "@cadence/ui";
 
@@ -11,7 +12,12 @@ export default function PlansPage() {
 
   return (
     <div>
-      <h1 className="font-display text-2xl mb-6">Plans</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="font-display text-2xl">Plans</h1>
+        <Link href="/dashboard/plans/new" className="rounded-md bg-sapphire text-paper px-4 py-2 font-body text-sm font-semibold">
+          New Plan
+        </Link>
+      </div>
       <table className="w-full text-sm font-body">
         <thead>
           <tr className="text-left text-slate border-b border-slate/15">
