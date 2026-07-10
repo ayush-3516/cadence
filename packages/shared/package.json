@@ -4,6 +4,16 @@
   "version": "0.0.0",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./abis": {
+      "types": "./dist/src/abis-only.d.ts",
+      "default": "./dist/src/abis-only.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

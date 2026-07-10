@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { subscriptionManagerAbi } from "@cadence/shared";
+// Imported from the browser-safe "/abis" subpath, not the main "@cadence/shared"
+// barrel — the main barrel also exports encryptSecret/decryptSecret, which pull in
+// node:crypto and break any browser bundle importing anything from it (the same
+// class of bug fixed for @cadence/sdk earlier in this phase).
+import { subscriptionManagerAbi } from "@cadence/shared/abis";
 
 export type WriteStatus = "idle" | "confirming" | "pending" | "processing" | "done" | "error";
 
