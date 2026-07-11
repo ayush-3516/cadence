@@ -1,10 +1,12 @@
 "use client";
 
 import { useSubscriptionWrite } from "../lib/hooks/useSubscriptionWrite.js";
+import { useRevokeAllowance } from "../lib/hooks/useRevokeAllowance.js";
 
 export interface SubscriptionActionsProps {
   subId: string;
   status: string;
+  token: string;
 }
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -14,13 +16,18 @@ const STATUS_MESSAGE: Record<string, string> = {
   error: "Something went wrong. Please try again.",
 };
 
-export function SubscriptionActions({ subId, status }: SubscriptionActionsProps) {
+export function SubscriptionActions({ subId, status, token }: SubscriptionActionsProps) {
   const cancelWrite = useSubscriptionWrite("cancel");
   const pauseWrite = useSubscriptionWrite("pauseSubscription");
   const resumeWrite = useSubscriptionWrite("resumeSubscription");
+  const revokeWrite = useRevokeAllowance();
 
-  const anyInFlight = [cancelWrite.status, pauseWrite.status, resumeWrite.status].some((s) => s === "confirming" || s === "pending");
-  const activeStatus = [cancelWrite.status, pauseWrite.status, resumeWrite.status].find((s) => s !== "idle" && s !== "done");
+  const anyInFlight = [cancelWrite.status, pauseWrite.status, resumeWrite.status, revokeWrite.status].some(
+    (s) => s === "confirming" || s === "pending",
+  );
+  const activeStatus = [cancelWrite.status, pauseWrite.status, resumeWrite.status, revokeWrite.status].find(
+    (s) => s !== "idle" && s !== "done",
+  );
 
   return (
     <div className="flex flex-col gap-2 mt-4">
@@ -57,6 +64,18 @@ export function SubscriptionActions({ subId, status }: SubscriptionActionsProps)
         >
           Cancel at period end
         </button>
+      </div>
+      <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-paper/10">
+        <button
+          onClick={() => revokeWrite.write(token)}
+          disabled={anyInFlight}
+          className="self-start rounded-md border border-paper/30 px-3 py-1.5 text-sm font-body disabled:opacity-50"
+        >
+          Revoke spending permission
+        </button>
+        <p className="font-body text-xs text-slate">
+          This stops future automatic charges by revoking your token spending approval. Your subscription itself is not canceled.
+        </p>
       </div>
       {activeStatus && STATUS_MESSAGE[activeStatus] && <p className="font-body text-xs text-slate">{STATUS_MESSAGE[activeStatus]}</p>}
     </div>
