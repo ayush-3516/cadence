@@ -184,7 +184,7 @@ describe("Prepare", () => {
     expect(response.body.permit.message).toEqual({
       owner: subscriberOwner,
       spender: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-      value: "5000000",
+      value: "60000000", // 5000000 * 12 periods
       nonce: "7",
       deadline: response.body.permit.message.deadline,
     });
