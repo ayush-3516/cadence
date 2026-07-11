@@ -1,10 +1,12 @@
-// Minimal EIP-2612 permit ABI fragment — only the functions this codebase's
-// /v1/prepare/subscribe endpoint needs to read (name, nonces) or reference
-// (permit, for calldata shape parity with SubscriptionManager's own ABI
-// style). `version()` (EIP-5267) is deliberately NOT included here — not
-// every ERC-20 exposes it uniformly, so PrepareService reads it via a raw
-// eth_call with a one-off inline ABI fragment and falls back to "1" on
-// revert, rather than depending on a function that might not exist.
+// Minimal ERC-20/EIP-2612 ABI fragment covering exactly what this codebase
+// needs: /v1/prepare/subscribe reads (name, nonces) or references (permit,
+// for calldata shape parity with SubscriptionManager's own ABI style);
+// apps/web's useRevokeAllowance hook calls the standard ERC-20 `approve`
+// directly against a subscriber's own wallet to zero out a standing
+// allowance (Phase 1r). `version()` (EIP-5267) is deliberately NOT included
+// here — not every ERC-20 exposes it uniformly, so PrepareService reads it
+// via a raw eth_call with a one-off inline ABI fragment and falls back to
+// "1" on revert, rather than depending on a function that might not exist.
 export const erc20PermitAbi = [
   {
     type: "function",
@@ -33,6 +35,16 @@ export const erc20PermitAbi = [
       { name: "s", type: "bytes32", internalType: "bytes32" },
     ],
     outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "approve",
+    inputs: [
+      { name: "spender", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
     stateMutability: "nonpayable",
   },
 ] as const;
