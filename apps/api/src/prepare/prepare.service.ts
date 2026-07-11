@@ -22,6 +22,13 @@ export interface PrepareSubscribeResponse {
 }
 
 const PERMIT_DEADLINE_SECONDS = 15 * 60;
+// SubscriptionManager._charge() draws down a standing ERC-20 allowance every
+// billing period (no fresh permit per charge) — a permit sized to exactly one
+// period's amount means every subscription self-terminates into past_due
+// after its first charge. 12 periods gives a full year of unattended
+// auto-renewal for monthly plans while bounding the subscriber's real
+// exposure to an auditable, fixed number rather than an unlimited allowance.
+const PERMIT_PERIODS_ALLOWANCE = 12;
 
 const VERSION_ABI = [
   { type: "function", name: "version", inputs: [], outputs: [{ name: "", type: "string" }], stateMutability: "view" },
@@ -89,7 +96,7 @@ export class PrepareService {
         message: {
           owner,
           spender: config.subscriptionManagerAddress,
-          value: plan.amount,
+          value: (BigInt(plan.amount) * BigInt(PERMIT_PERIODS_ALLOWANCE)).toString(),
           nonce: nonce.toString(),
           deadline,
         },

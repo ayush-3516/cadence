@@ -20,4 +20,16 @@ describe("erc20PermitAbi", () => {
     // @ts-expect-error -- narrowed by the find() above at runtime
     expect(nonces.outputs).toEqual([{ name: "", type: "uint256", internalType: "uint256" }]);
   });
+
+  it("includes a standard ERC-20 approve function fragment", () => {
+    const approveFn = erc20PermitAbi.find((entry) => entry.type === "function" && entry.name === "approve");
+    expect(approveFn).toBeDefined();
+    // @ts-expect-error -- narrowed by the find() above at runtime
+    expect(approveFn.inputs).toEqual([
+      { name: "spender", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
+    ]);
+    // @ts-expect-error -- narrowed by the find() above at runtime
+    expect(approveFn.outputs).toEqual([{ name: "", type: "bool", internalType: "bool" }]);
+  });
 });
