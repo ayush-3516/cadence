@@ -8,6 +8,13 @@
       "when": 1783197299891,
       "tag": "0000_onchain_mirror",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783718677324,
+      "tag": "0001_onchain_payout_mirror",
+      "breakpoints": true
     }
   ]
 }
